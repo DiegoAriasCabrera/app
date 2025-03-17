@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Sistema de recolección de basura</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon/favicon.png') }}">
+</head>
+<body>
+
+  <div class="form-container">
+    <h2>Sistema de recolección de basura</h2>
+
+    <!-- PRIMER FORMULARIO: Selección de alcaldía -->
+    <form method="POST" action="{{ url_for('seleccionar_alcaldia') }}" id="alcaldiaForm" class="post">
+      <table class="form-table">
+        <tr>
+          <td><label for="alcaldía">Alcaldía:</label></td>
+          <td>
+            <select name="alcaldía" id="alcaldía" class="seleccionador-opciones" required>
+              <option value="" disabled {% if not seleccionada %}selected{% endif %}>Selecciona una alcaldía</option>
+              {% for alc in alcaldías %}
+                <option value="{{ alc }}" {% if alc == seleccionada %}selected{% endif %}>{{ alc }}</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+      </table>
+    </form>
+
+    {% if seleccionada %}
+      <!-- SEGUNDO FORMULARIO: Camiones y Parámetros -->
+      <!-- Se envía a procesar_agrupamiento con la alcaldía seleccionada -->
+      <form method="POST" action="{{ url_for('procesar_agrupamiento', alcaldia=seleccionada) }}" id="datosForm" class="post">
+        
+        <!-- Sección Camiones -->
+        <h3>Agregar Camiones para {{ seleccionada }}</h3>
+
+        <table class="form-table" id="camionesTable">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Capacidad</th>
+              <th>Factor de reserva</th>
+              <th>Cantidad de camiones</th>
+              <th>
+                <!-- Botón para añadir filas de camiones -->
+                <button type="button" id="addCamionBtn">+</button>
+              </th>
+            </tr>
+          </thead>
+          <tbody id="camionesContainer">
+            <!-- Primera fila por defecto -->
+            <tr>
+              <td>
+                <input type="text" name="camiones[0][nombre]" required>
+              </td>
+              <td>
+                <input type="text" name="camiones[0][capacidad]" min="0" required>
+              </td>
+              <td>
+                <input type="text" name="camiones[0][factor_reserva]" min="0" required>
+              </td>
+              <td>
+                <input type="text" name="camiones[0][cantidad_camiones]" min="0" required>
+              </td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Sección Parámetros de agrupamiento -->
+        <h3>Parámetros para la agrupación de {{ seleccionada }}</h3>
+        <table class="form-table">
+          <tr>
+            <td><label for="tamano_poblacion">Tamaño de población:</label></td>
+            <td><input type="text" name="agrupamiento[tamano_poblacion]" min="0" required></td>
+          </tr>
+          <tr>
+            <td><label for="num_generaciones">Número de generaciones:</label></td>
+            <td><input type="text" name="agrupamiento[num_generaciones]" min="0" required></td>
+          </tr>
+          <tr>
+            <td><label for="tasa_mutacion">Tasa de mutación:</label></td>
+            <td><input type="text" name="agrupamiento[tasa_mutacion]" step="0.001" min="0" required></td>
+          </tr>
+          <tr>
+            <td><label for="factor_basura">Factor de basura:</label></td>
+            <td><input type="text" name="agrupamiento[factor_basura]" step="0.001" min="0" required></td>
+          </tr>
+        </table>
+
+        <!-- Botón final para enviar todo -->
+        <div class="enviar-boton">
+          <button type="submit">Enviar</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+
+  <script src="{{ url_for('static', filename='js/alcaldias.js') }}"></script>
+</body>
+</html>

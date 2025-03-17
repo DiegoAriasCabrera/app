@@ -1,0 +1,40 @@
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.form-container {
+    max-inline-size: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.form-table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    margin-block-end: 20px;
+}
+
+.form-table td,
+.form-table th {
+    padding: 8px;
+    border: 1px solid #ccc;
+    text-align: start;
+}
+
+.enviar-boton {
+    margin-block-start: 20px;
+    text-align: center;
+}
+
+#addCamionBtn {
+    cursor: pointer;
+    font-size: 16px;
+    padding: 5px 10px;
+}
