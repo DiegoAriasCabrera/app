@@ -1,0 +1,21 @@
+<!-- templates/resultado_final.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Resultado final</title>
+</head>
+<body>
+  <h1>Resultado final para la alcaldía {{ alcaldia }}</h1>
+
+  <h2>Resultado del Agrupamiento</h2>
+  <img src="{{ url_for('static', filename=image_agrup) }}" alt="Imagen Agrupamiento">
+
+  <h2>Resultado de Procesamiento de Calles</h2>
+  <img src="{{ url_for('static', filename=image_calles) }}" alt="Imagen Calles">
+
+  <p>Los archivos .json y .shp se han almacenado en la carpeta <code>temp/</code> (o subcarpetas) 
+     sin entregarlos directamente al usuario.
+  </p>
+</body>
+</html>

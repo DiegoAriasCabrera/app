@@ -903,10 +903,9 @@ class AgrupamientoAGEB:
         if leyenda:
             plt.legend(handles=leyenda, loc='best', title="Camiones")
 
-        # Si se especifica `output_path`, guardamos la figura en disco.
-        if output_path is not None:
+        if output_path:
             plt.savefig(output_path, bbox_inches='tight')
-            plt.close()  # Liberar memoria
+            plt.close()
         else:
             plt.show()
 
