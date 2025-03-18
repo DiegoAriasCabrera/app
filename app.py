@@ -60,12 +60,24 @@ def agregar_camiones(alcaldia):
     para capturar camiones y parámetros.
     """
     if request.method == 'POST':
-        # Si se envía el formulario, redirige a procesar_agrupamiento
+        # Guardar los datos del formulario en la sesión
+        session['tamano_poblacion'] = request.form.get('agrupamiento[tamano_poblacion]')
+        session['num_generaciones'] = request.form.get('agrupamiento[num_generaciones]')
+        session['tasa_mutacion'] = request.form.get('agrupamiento[tasa_mutacion]')
+        session['factor_basura'] = request.form.get('agrupamiento[factor_basura]')
+        
+        camiones = []
+        for key in request.form.keys():
+            if key.startswith('camiones'):
+                camiones.append(request.form.get(key))
+        session['camiones'] = camiones
+
+        # Redirige a la ruta donde se piden datos de camiones
         return redirect(url_for('pagina_sse', alcaldia=alcaldia))
 
     # Renderiza la plantilla con la alcaldía seleccionada
     # (El "alcaldías=[]" es para que no se muestren de nuevo en el select)
-    return render_template('Alcaldías.html', alcaldías=[], seleccionada=alcaldia)
+    return render_template('Alcaldías.html', alcaldías=[alcaldia], seleccionada=alcaldia)
 
 
 @app.route('/Alcaldías/<alcaldia>/sse')
@@ -85,28 +97,24 @@ def progreso_agrupamiento(alcaldia):
     2) Ejecuta AgrupamientoAGEB con tqdm, enviando SSE.
     3) Al terminar, manda "DONE" y genera su imagen en /temp.
     """
-    # Para hacerlo simple, los datos del formulario que enviaste 
-    # están en request.form. Pero no los tenemos aquí porque se hace un redirect...
-    # Solución: guardamos en session los datos al POST.
-    # O leemos en la DB. Aquí haremos un "hack": re-leer request.form. 
-    # Pero no es lo usual. Lo correcto es guardarlos en session antes del redirect.
+    # Recuperar los datos de la sesión
+    tamano_poblacion = int(session.get('tamano_poblacion', 50))
+    num_generaciones = int(session.get('num_generaciones', 10))
+    tasa_mutacion = float(session.get('tasa_mutacion', 0.01))
+    factor_basura = float(session.get('factor_basura', 1.071))
+    reconectar_grupos = True
+    semilla_random = None
 
-    # Vamos a simular la lectura de form con session (opcional).
-    # O, si tu formulario era un POST, lo perdiste en el redirect. 
-    # Lo más fácil: guardaste la data en session en 'agregar_camiones' (no implementado aquí).
-
-    # Haré un ejemplo con datos fijos.
-    # En la realidad, obtendrías: tamano_poblacion, num_generaciones, etc. de tu session/form.
-    tamano_poblacion = 50
-    num_generaciones = 10
-    tasa_mutacion    = 0.01
-    factor_basura    = 1.071
-    limite_peso      = None
-    reconectar_grupos= True
-    semilla_random   = None
-
-    # Camiones fake:
-    camiones = [Camion(1000, 1.1, 2, "Camión A")]
+    # Recuperar los camiones de la sesión
+    camiones_data = session.get('camiones', [])
+    camiones = []
+    for i in range(0, len(camiones_data), 4):
+        camiones.append(Camion(
+            capacidad=float(camiones_data[i+1]),
+            factor_reserva=float(camiones_data[i+2]),
+            cantidad_camiones=int(camiones_data[i+3]),
+            nombre=camiones_data[i]
+        ))
 
     shapefile_path = os.path.join(app.root_path, 'Alcaldías', f'{alcaldia}.shp')
     if not os.path.exists(shapefile_path):
@@ -114,12 +122,10 @@ def progreso_agrupamiento(alcaldia):
             yield "data: ERROR\n\n"
         return Response(gen_err(), mimetype="text/event-stream")
 
-    # Empleamos SSE + tqdm
     def generate():
-        # 1) Instanciamos el agrupador
+        # Instanciamos el agrupador
         agrupador = AgrupamientoAGEB(
             ruta_shp=shapefile_path,
-            limite_peso=limite_peso,
             tamano_poblacion=tamano_poblacion,
             num_generaciones=num_generaciones,
             tasa_mutacion=tasa_mutacion,
@@ -128,13 +134,6 @@ def progreso_agrupamiento(alcaldia):
             reconectar_grupos=reconectar_grupos,
             semilla_random=semilla_random
         )
-
-        # 2) Vamos a reescribir (temporalmente) el loop genético con tqdm
-        #    para mandar SSE. En tu clase tienes:
-        #    for _ in tqdm(range(self.num_generaciones)):
-        #       poblacion, ind, fitness = self._evolucionar_poblacion(poblacion)
-        #    ...
-        #    => Lo haremos inline.
 
         # Creamos la población inicial
         poblacion = agrupador._crear_poblacion()
@@ -193,8 +192,6 @@ def progreso_agrupamiento(alcaldia):
         yield "data: DONE\n\n"
 
     return Response(generate(), mimetype="text/event-stream")
-
-
 @app.route('/Alcaldías/<alcaldia>/progreso_calles')
 def progreso_calles(alcaldia):
     """
