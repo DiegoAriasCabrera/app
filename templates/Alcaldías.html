@@ -30,8 +30,8 @@
 
     {% if seleccionada %}
       <!-- SEGUNDO FORMULARIO: Camiones y Parámetros -->
-      <!-- Se envía a procesar_agrupamiento con la alcaldía seleccionada -->
-      <form method="POST" action="{{ url_for('procesar_agrupamiento', alcaldia=seleccionada) }}" id="datosForm" class="post">
+      <!-- Se envía a progreso_agrupamiento con la alcaldía seleccionada -->
+      <form method="POST" action="{{ url_for('progreso_agrupamiento', alcaldia=seleccionada) }}" id="datosForm" class="post">
         
         <!-- Sección Camiones -->
         <h3>Agregar Camiones para {{ seleccionada }}</h3>
@@ -44,26 +44,19 @@
               <th>Factor de reserva</th>
               <th>Cantidad de camiones</th>
               <th>
-                <!-- Botón para añadir filas de camiones -->
+                <!-- Botones para añadir y quitar filas de camiones -->
                 <button type="button" id="addCamionBtn">+</button>
+                <button type="button" id="removeCamionBtn">-</button>
               </th>
             </tr>
           </thead>
           <tbody id="camionesContainer">
             <!-- Primera fila por defecto -->
             <tr>
-              <td>
-                <input type="text" name="camiones[0][nombre]" required>
-              </td>
-              <td>
-                <input type="text" name="camiones[0][capacidad]" min="0" required>
-              </td>
-              <td>
-                <input type="text" name="camiones[0][factor_reserva]" min="0" required>
-              </td>
-              <td>
-                <input type="text" name="camiones[0][cantidad_camiones]" min="0" required>
-              </td>
+              <td> <input type="text" name="camiones[0][nombre]" required> </td>
+              <td><input type="text" name="camiones[0][capacidad]" min="0" required inputmode="decimal" oninput="this.value = this.value.replace(/[^0-9.]/g, '');"></td>
+              <td><input type="text" name="camiones[0][factor_reserva]" min="0" required inputmode="decimal" oninput="this.value = this.value.replace(/[^0-9.]/g, '');"></td>
+              <td><input type="text" name="camiones[0][cantidad_camiones]" min="0" required inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '');"></td>
               <td></td>
             </tr>
           </tbody>
@@ -74,19 +67,19 @@
         <table class="form-table">
           <tr>
             <td><label for="tamano_poblacion">Tamaño de población:</label></td>
-            <td><input type="text" name="agrupamiento[tamano_poblacion]" min="0" required></td>
+            <td><input type="text" name="agrupamiento[tamano_poblacion]" min="0" required inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '');"></td>
           </tr>
           <tr>
             <td><label for="num_generaciones">Número de generaciones:</label></td>
-            <td><input type="text" name="agrupamiento[num_generaciones]" min="0" required></td>
+            <td><input type="text" name="agrupamiento[num_generaciones]" min="0" required inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '');"></td>
           </tr>
           <tr>
             <td><label for="tasa_mutacion">Tasa de mutación:</label></td>
-            <td><input type="text" name="agrupamiento[tasa_mutacion]" step="0.001" min="0" required></td>
+            <td><input type="text" name="agrupamiento[tasa_mutacion]" min="0" max="1" required inputmode="decimal" oninput="this.value = this.value.replace(/[^0-9.]/g, '');"></td>
           </tr>
           <tr>
             <td><label for="factor_basura">Factor de basura:</label></td>
-            <td><input type="text" name="agrupamiento[factor_basura]" step="0.001" min="0" required></td>
+            <td><input type="text" name="agrupamiento[factor_basura]" min="0" required inputmode="decimal" oninput="this.value = this.value.replace(/[^0-9.]/g, '');"></td>
           </tr>
         </table>
 

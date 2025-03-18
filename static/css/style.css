@@ -38,3 +38,21 @@ input[type=number] {
     font-size: 16px;
     padding: 5px 10px;
 }
+
+.barra-container {
+        inline-size: 300px; 
+        block-size: 20px;
+        background: #ccc; 
+        margin: 1em 0;
+        display: none; 
+}
+
+.barra-inner {
+  background: #07c;
+  block-size: 100%;
+  inline-size: 0%;
+  color: #fff;
+  text-align: center;
+  font-size: 12px;
+  line-height: 20px;
+}

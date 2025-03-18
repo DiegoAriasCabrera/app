@@ -94,24 +94,24 @@ class Camion:
 
 class AgrupamientoAGEB:
     """
-    Gestiona el proceso de agrupamiento de nodos (AGEBs) mediante un algoritmo genético elitista y facilita la asignación
-    de camiones para cada grupo resultante.
+    Gestiona el proceso de agrupamiento de nodos (AGEBs) mediante un algoritmo genético elitista.
+    Además, facilita la asignación de camiones para cada grupo resultante y permite el posterior
+    ajuste de la asignación si es necesario subdividir grupos con sobrepeso.
     
     :param ruta_shp: Ruta al archivo Shapefile que contiene la información de las AGEBs.
     :type ruta_shp: str
-    :param limite_peso: Peso máximo permitido por cada grupo (capacidad de agrupamiento). Puede ser None si se proporcionan camiones.
-    :type limite_peso: Optional[float]
-    :param tamano_poblacion: Tamaño de la población inicial para el algoritmo genético.
+    :param tamano_poblacion: Tamaño de la población inicial del algoritmo genético.
     :type tamano_poblacion: int
-    :param num_generaciones: Número de iteraciones (generaciones) del algoritmo genético.
+    :param num_generaciones: Número de iteraciones (generaciones) que ejecutará el algoritmo genético.
     :type num_generaciones: int
     :param tasa_mutacion: Probabilidad de mutación para cada gen (nodo) en un individuo.
     :type tasa_mutacion: float
-    :param factor_basura: Factor que multiplica la población de cada nodo para estimar su peso en basura.
+    :param factor_basura: Factor que multiplica la población de cada nodo para estimar el peso en basura.
     :type factor_basura: float
     :param camiones: Lista de objetos Camion disponibles para atender los grupos resultantes.
     :type camiones: Optional[List[Camion]]
-    :param reconectar_grupos: Indica si después del agrupamiento se deben añadir aristas entre los nodos que pertenezcan al mismo grupo y no estén conectados.
+    :param reconectar_grupos: Indica si se deben reconectar aristas entre los nodos que pertenezcan
+                              al mismo grupo, una vez finalizado el agrupamiento.
     :type reconectar_grupos: bool
     :param semilla_random: Semilla para reproducibilidad de resultados aleatorios.
     :type semilla_random: Optional[int]
@@ -120,9 +120,8 @@ class AgrupamientoAGEB:
     def __init__(
         self,
         ruta_shp: str,
-        limite_peso: Optional[float] = None,
-        tamano_poblacion: int = 500,
-        num_generaciones: int = 750,
+        tamano_poblacion: int = 750,
+        num_generaciones: int = 500,
         tasa_mutacion: float = 0.01,
         factor_basura: float = 1.071,
         camiones: Optional[List[Camion]] = None,
@@ -130,91 +129,84 @@ class AgrupamientoAGEB:
         semilla_random: Optional[int] = None
     ) -> None:
         """
-        Configura y carga la información geográfica, genera la gráfica de nodos y, de existir, ajusta los parámetros de límite de peso.
+        Configura la instancia cargando la información geográfica desde el Shapefile especificado.
+        Posteriormente, genera la gráfica de nodos y, si existen camiones, ajusta los parámetros de
+        límite de peso de acuerdo con sus capacidades.
         """
-        # Se asigna la semilla para reproducibilidad, de haber sido proporcionada.
+        # Si se proporciona una semilla aleatoria, se fija para garantizar reproducibilidad.
         if semilla_random is not None:
             random.seed(semilla_random)
 
-        # Se asigna la ruta del shapefile.
+        # Almacena la ruta del archivo Shapefile.
         self.ruta_shapefile: str = ruta_shp
-        
-        # Se asigna el límite de peso base (que puede ser sobrescrito por la capacidad de los camiones).
-        self.limite_peso_base: Optional[float] = limite_peso
-        
-        # Se asigna el tamaño de la población del algoritmo genético.
+
+        # Define el tamaño de la población inicial para el algoritmo genético.
         self.tamano_poblacion: int = tamano_poblacion
-        
-        # Se asigna el número de generaciones del algoritmo genético.
+
+        # Número total de generaciones que se ejecutarán.
         self.num_generaciones: int = num_generaciones
-        
-        # Se asigna la tasa de mutación.
+
+        # Probabilidad de que ocurra mutación en cada gen (nodo).
         self.tasa_mutacion: float = tasa_mutacion
-        
-        # Se asigna el factor para estimar el peso en basura de cada nodo.
+
+        # Factor para convertir la población de cada nodo en peso de basura.
         self.factor_basura: float = factor_basura
-        
-        # Se asigna la lista de camiones disponibles.
+
+        # Lista de camiones disponibles para la asignación.
         self.camiones: Optional[List[Camion]] = camiones
-        
-        # Se indica si se reconectarán internamente los grupos.
+
+        # Indica si se reconectarán los nodos dentro de cada grupo tras el agrupamiento.
         self.reconectar_grupos: bool = reconectar_grupos
 
-        # Se fija el tamaño de la "élite" para la selección elitista.
-        self.elite_size: int = 250  # Este valor puede ajustarse según se requiera
+        # Tamaño de la élite utilizada en la fase de selección elitista del algoritmo genético.
+        self.tamano_elite: int = tamano_poblacion // 10
 
-        # Se intenta cargar el shapefile mediante geopandas.
+        # Se intenta leer el archivo Shapefile para generar el GeoDataFrame.
         try:
             self.gdf: gpd.GeoDataFrame = gpd.read_file(ruta_shp)
         except Exception as error:
             raise ErrorShapefile(f"Error al leer el shapefile: {error}")
 
-        # Se crea la gráfica a partir de la información geográfica.
+        # Se construye la gráfica principal.
         self.gráfica: nx.Graph = nx.Graph()
         self._crear_gráfica()
-
-        # Se determina el límite de peso a utilizar (ya sea basado en los camiones o en el valor base).
-        self.limite_peso: float = self._obtener_limite_peso()
-
-    # ------------------------------------------------------------------------
+    
+    # -------------------------------------------------------------------------
     # Métodos privados
-    # ------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def _obtener_limite_peso(self) -> float:
         """
-        Determina el límite de peso a utilizar. Si existen camiones disponibles, se toma el máximo de sus capacidades efectivas.
-        En caso contrario, se utiliza el valor base.
+        Determina el límite de peso a utilizar para agrupar. Si existen camiones disponibles, se toma el
+        máximo de sus capacidades efectivas (capacidad * factor_reserva).
         
         :return: Límite de peso para el agrupamiento.
         :rtype: float
-        :raises ValueError: Si no se especifica un límite de peso ni se proporcionan camiones.
+        :raises ValueError: Si no se especifica un límite de peso y no se proporcionan camiones.
         """
         if self.camiones and len(self.camiones) > 0:
-            # Se calcula la máxima capacidad efectiva entre los camiones disponibles.
             return max(camion.capacidad * camion.factor_reserva for camion in self.camiones)
-        elif self.limite_peso_base is not None:
-            return self.limite_peso_base
         else:
+            # Si no hay camiones y no hay límite de peso, se lanza excepción.
             raise ValueError("Debe especificarse un límite de peso o proporcionar camiones.")
 
     def _crear_gráfica(self) -> None:
         """
         Construye la gráfica a partir de la información contenida en el GeoDataFrame.
-        Cada fila se convierte en un nodo con atributos; se agregan aristas entre nodos si sus geometrías se tocan.
+        Cada fila del GeoDataFrame se convierte en un nodo con atributos, y se añaden aristas
+        entre nodos cuyas geometrías se tocan (adyacencia espacial).
         
         :raises ErrorShapefile: Si la columna 'pob' no se encuentra en el shapefile.
         :raises ErrorRedVial: Si ocurre algún error durante la construcción de la gráfica.
         """
         try:
-            # Se itera sobre cada fila del GeoDataFrame para agregar nodos a la gráfica.
             for indice, fila in self.gdf.iterrows():
                 if 'pob' not in fila:
-                    raise ErrorShapefile(f"No se encontró la columna 'pob' en el nodo {indice}.")
-                
-                # Se calcula el peso del nodo multiplicando la población por el factor de basura.
+                    raise ErrorShapefile(
+                        f"No se encontró la columna 'pob' en el shapefile para el nodo {indice}."
+                    )
+                # Se calcula el peso de los nodos tomando en cuenta a la población y a la generación per cápita de basura por persona.
                 peso: float = fila['pob'] * self.factor_basura
-
-                # Se agrega el nodo a la gráfica con atributos: geometría, posición (centroide) y peso.
                 self.gráfica.add_node(
                     indice,
                     geometria=fila.geometry,
@@ -222,58 +214,58 @@ class AgrupamientoAGEB:
                     peso=peso
                 )
 
-            # Se agregan aristas entre nodos cuando sus geometrías se tocan.
             for i, fila1 in self.gdf.iterrows():
                 for j, fila2 in self.gdf.iterrows():
-                    # Se evita duplicar la arista (i < j).
                     if i < j and fila1.geometry.touches(fila2.geometry):
                         self.gráfica.add_edge(i, j)
 
         except Exception as error:
             raise ErrorRedVial(f"Error creando la gráfica: {error}")
 
-    def _crear_poblacion(self) -> List[List[int]]:
+    def _crear_poblacion_inicial(self, grafica: nx.Graph, limite: float) -> List[List[int]]:
         """
-        Crea la población inicial para el algoritmo genético. Cada individuo es una lista en la que cada posición indica
-        el grupo asignado al nodo correspondiente.
+        Crea la población inicial para el algoritmo genético sobre la gráfica especificada.
+        Cada individuo es una lista en la que cada posición indica el grupo asignado al nodo correspondiente.
         
-        Se utiliza un enfoque voraz que agrupa nodos vecinos sin exceder el límite de peso.
+        El método recorre los nodos y los agrupa de manera voraz mientras no se exceda el límite de peso,
+        generando múltiples soluciones aleatorias que conformarán la población inicial.
         
+        :param grafica: Gráfica sobre la cual se generarán los individuos.
+        :type grafica: nx.Graph
+        :param limite: Límite de peso que no deben exceder los grupos.
+        :type limite: float
         :return: Lista de individuos representados como listas de asignaciones de grupos.
         :rtype: List[List[int]]
         """
         poblacion: List[List[int]] = []
-        num_nodos: int = self.gráfica.number_of_nodes()
-        
-        # Se generan tantos individuos como indique el tamaño de la población.
+        num_nodos: int = grafica.number_of_nodes()
+        nodos_ordenados = list(grafica.nodes())
+
         for _ in range(self.tamano_poblacion):
-            # Se inicializa el individuo con -1, indicando que el nodo aún no ha sido asignado a un grupo.
             individuo: List[int] = [-1] * num_nodos
             nodos_visitados: set = set()
             grupo_actual: int = 0
 
-            # Se recorre cada nodo para asignarlo a un grupo.
-            for nodo in self.gráfica.nodes:
+            for nodo in nodos_ordenados:
                 if nodo not in nodos_visitados:
-                    # Se asigna el primer nodo del grupo.
-                    peso_acumulado: float = self.gráfica.nodes[nodo]['peso']
+                    peso_acumulado: float = grafica.nodes[nodo]['peso']
                     nodos_grupo: List[int] = [nodo]
 
-                    # Se expande el grupo mientras sea posible sin exceder el límite de peso.
                     while nodos_grupo:
                         nodo_actual: int = nodos_grupo.pop()
-                        if individuo[nodo_actual] == -1:
-                            individuo[nodo_actual] = grupo_actual
+                        pos_nodo = nodos_ordenados.index(nodo_actual)
+
+                        if individuo[pos_nodo] == -1:
+                            individuo[pos_nodo] = grupo_actual
                             nodos_visitados.add(nodo_actual)
 
-                            # Se examinan los vecinos para agregarlos al mismo grupo, si no se excede el límite.
-                            for vecino in self.gráfica.neighbors(nodo_actual):
+                            for vecino in grafica.neighbors(nodo_actual):
                                 if vecino not in nodos_visitados:
-                                    peso_vecino: float = self.gráfica.nodes[vecino]['peso']
-                                    if peso_acumulado + peso_vecino <= self.limite_peso:
+                                    peso_vecino = grafica.nodes[vecino]['peso']
+                                    if peso_acumulado + peso_vecino <= limite:
                                         nodos_grupo.append(vecino)
                                         peso_acumulado += peso_vecino
-                    # Se incrementa el identificador de grupo.
+
                     grupo_actual += 1
 
             poblacion.append(individuo)
@@ -281,56 +273,63 @@ class AgrupamientoAGEB:
         return poblacion
 
     def _calcular_fitness(
-            self, 
-            individuo: List[int]
+        self,
+        grafica: nx.Graph,
+        individuo: List[int],
+        limite: float
     ) -> float:
         """
-        Calcula el valor de aptitud (fitness) de un individuo (agrupamiento de nodos).
+        Calcula el valor de fitness de un individuo sobre la gráfica indicada, basándose en criterios:
         
-        El cálculo penaliza:
-          1) Exceder el límite de peso en algún grupo.
-          2) La existencia de aristas entre nodos de diferentes grupos, y premia las internas.
-          3) En presencia de camiones, penaliza fuertemente aquellos grupos cuya carga supere la capacidad de todos los camiones disponibles.
+        1) Penaliza grupos cuyo peso excede el límite.
+        2) Penaliza las aristas que conectan nodos de grupos distintos y premia las aristas internas.
+        3) Si hay camiones definidos, penaliza fuertemente los grupos cuyo peso supere la capacidad
+           de todos los camiones disponibles.
         
-        :param individuo: Lista en la que cada posición indica el grupo al que pertenece el nodo.
+        :param grafica: Gráfica a la cual corresponde el individuo (puede ser la principal o una subgráfica).
+        :type grafica: nx.Graph
+        :param individuo: Lista que asigna un grupo a cada nodo (por su posición en la lista).
         :type individuo: List[int]
-        :return: Puntaje de aptitud obtenido.
+        :param limite: Límite de peso para los grupos del individuo.
+        :type limite: float
+        :return: Puntaje de aptitud obtenido para el individuo.
         :rtype: float
         """
         puntaje: float = 0.0
         pesos_por_grupo: Dict[int, float] = {}
+        nodos_ordenados = list(grafica.nodes())
 
-        # Se acumulan los pesos de los nodos en cada grupo.
-        for nodo in self.gráfica.nodes():
-            grupo: int = individuo[nodo]
-            pesos_por_grupo[grupo] = pesos_por_grupo.get(grupo, 0.0) + self.gráfica.nodes[nodo]['peso']
+        for i, nodo in enumerate(nodos_ordenados):
+            grupo: int = individuo[i]
+            pesos_por_grupo[grupo] = pesos_por_grupo.get(grupo, 0.0) + grafica.nodes[nodo]['peso']
 
-        # (1) Penaliza el exceso sobre el límite de peso.
         for peso_grupo in pesos_por_grupo.values():
-            if peso_grupo > self.limite_peso:
-                puntaje -= (peso_grupo - self.limite_peso)
+            if peso_grupo > limite:
+                puntaje -= (peso_grupo - limite)
 
-        # (2) Se premian las aristas internas y se penalizan las que cruzan grupos.
-        for nodo_u, nodo_v in self.gráfica.edges():
-            if individuo[nodo_u] == individuo[nodo_v]:
-                puntaje += 2.0  # Se premia la arista interna.
+        for u, v in grafica.edges():
+            idx_u = nodos_ordenados.index(u)
+            idx_v = nodos_ordenados.index(v)
+            if individuo[idx_u] == individuo[idx_v]:
+                puntaje += 2.0
             else:
-                puntaje -= 1.0  # Se penaliza la arista entre distintos grupos.
+                puntaje -= 1.0
 
-        # (3) Penalización adicional para grupos que exceden la capacidad de todos los camiones.
         if self.camiones:
-            capacidades: List[float] = []
+            capacidades_efectivas: List[float] = []
             for camion in self.camiones:
-                capacidades.extend([camion.capacidad * camion.factor_reserva] * camion.cantidad_camiones)
-            capacidades.sort(reverse=True)
+                capacidades_efectivas.extend(
+                    [camion.capacidad * camion.factor_reserva] * camion.cantidad_camiones
+                )
+            capacidades_efectivas.sort(reverse=True)
 
             for peso_grupo in pesos_por_grupo.values():
-                if not any(capacidad >= peso_grupo for capacidad in capacidades):
+                if not any(cap >= peso_grupo for cap in capacidades_efectivas):
                     puntaje -= (peso_grupo * 5)
 
         return puntaje
 
-    def _seleccionar(
+    def _seleccion_elitista(
         self,
         poblacion: List[List[int]],
         puntajes: List[float],
@@ -338,43 +337,35 @@ class AgrupamientoAGEB:
     ) -> List[List[int]]:
         """
         Realiza un proceso de selección elitista para elegir los individuos que pasarán a la siguiente generación.
+        Se ordena la población de mayor a menor según su fitness. Luego:
         
-        Se ordena la población de mayor a menor según fitness, se conservan los mejores y se elige adicionalmente de la mitad superior.
+        - Se conservan los mejores individuos (élite).
+        - Se completa la selección tomando individuos de la mitad superior.
         
-        :param poblacion: Lista de individuos de la generación actual.
+        :param poblacion: Conjunto de individuos de la generación actual.
         :type poblacion: List[List[int]]
-        :param puntajes: Lista con el fitness de cada individuo.
+        :param puntajes: Lista con los valores de fitness respectivos.
         :type puntajes: List[float]
         :param num_seleccionar: Número total de individuos a conservar.
         :type num_seleccionar: int
         :return: Lista de individuos seleccionados para la siguiente generación.
         :rtype: List[List[int]]
         """
-        # Se combinan los individuos con sus respectivos puntajes.
         combinados = list(zip(poblacion, puntajes))
         combinados.sort(key=lambda par: par[1], reverse=True)
 
-        # Se extrae el subconjunto élite.
-        elites = combinados[:self.elite_size]
-
-        # Se selecciona adicionalmente de la mitad superior.
+        elites = combinados[:self.tamano_elite]
         mitad_superior = combinados[:len(combinados)//2]
-        faltan_por_seleccionar = num_seleccionar - self.elite_size
-        seleccion_restante = mitad_superior[self.elite_size:self.elite_size + faltan_por_seleccionar]
+        faltan_por_seleccionar = num_seleccionar - self.tamano_elite
+        seleccion_restante = mitad_superior[self.tamano_elite:self.tamano_elite + faltan_por_seleccionar]
 
         nueva_seleccion = elites + seleccion_restante
+        return [ind for (ind, _) in nueva_seleccion]
 
-        # Se regresa únicamente la parte de individuos.
-        return [individuo for (individuo, fit) in nueva_seleccion]
-
-    def _cruzar(
-            self, 
-            padre1: List[int], 
-            padre2: List[int]
-    ) -> List[int]:
+    def _cruzar(self, padre1: List[int], padre2: List[int]) -> List[int]:
         """
-        Realiza un cruce simple entre dos individuos. Se elige un punto de cruce aleatorio (evitando extremos)
-        y se combina la parte inicial de un padre con la parte final del otro.
+        Realiza un cruce simple entre dos individuos, eligiendo un punto de cruce aleatorio y combinando
+        la parte inicial del primer padre con la parte final del segundo.
         
         :param padre1: Primer individuo.
         :type padre1: List[int]
@@ -386,82 +377,86 @@ class AgrupamientoAGEB:
         if len(padre1) <= 2:
             return padre1
         
-        punto_cruce: int = random.randint(1, len(padre1) - 2)
+        punto_cruce = random.randint(1, len(padre1) - 2)
         return padre1[:punto_cruce] + padre2[punto_cruce:]
 
-    def _mutar(
-            self, 
-            individuo: List[int]
-    ) -> List[int]:
+    def _mutar(self, individuo: List[int]) -> List[int]:
         """
-        Aplica la operación de mutación. Con una probabilidad igual a la tasa de mutación, se asigna al nodo
-        un nuevo identificador de grupo (max_grupo + 1).
+        Aplica la operación de mutación con una probabilidad igual a la tasa de mutación.
+        Para cada gen, se puede reasignar el grupo a un nuevo valor (max_grupo + 1).
         
         :param individuo: Individuo a mutar.
         :type individuo: List[int]
         :return: Individuo luego de aplicar la mutación.
         :rtype: List[int]
         """
-        max_grupo: int = max(individuo)
+        max_grupo = max(individuo)
         for i in range(len(individuo)):
             if random.random() < self.tasa_mutacion:
                 individuo[i] = max_grupo + 1
         return individuo
 
-    def _evolucionar_poblacion(
+    def _evolucion_poblacion(
         self,
-        poblacion: List[List[int]]
+        grafica: nx.Graph,
+        poblacion: List[List[int]],
+        limite: float
     ) -> Tuple[List[List[int]], List[int], float]:
         """
-        Ejecuta una generación de evolución genética: calcula el fitness, realiza la selección elitista, el cruce y la mutación.
-        Regresa la nueva población, el mejor individuo y su fitness.
+        Ejecuta una generación de evolución genética (cálculo de fitness, selección, cruce y mutación) y
+        devuelve la nueva población, el mejor individuo y su fitness.
         
-        :param poblacion: Población actual.
+        :param grafica: Gráfica sobre la cual se evalúan los individuos.
+        :type grafica: nx.Graph
+        :param poblacion: Población de individuos en la generación actual.
         :type poblacion: List[List[int]]
-        :return: Tupla (nueva_población, mejor_individuo, mejor_fitness).
+        :param limite: Límite de peso de los grupos.
+        :type limite: float
+        :return: Tupla con (nueva_población, mejor_individuo, mejor_fitness).
         :rtype: Tuple[List[List[int]], List[int], float]
         """
-        puntajes: List[float] = [self._calcular_fitness(ind) for ind in poblacion]
-        seleccionados: List[List[int]] = self._seleccionar(poblacion, puntajes, num_seleccionar=len(poblacion) // 2)
+        puntajes = [self._calcular_fitness(grafica, ind, limite) for ind in poblacion]
+        seleccionados = self._seleccion_elitista(poblacion, puntajes, num_seleccionar=len(poblacion) // 2)
+
         nueva_poblacion: List[List[int]] = []
         while len(nueva_poblacion) < len(poblacion):
             padre1, padre2 = random.sample(seleccionados, 2)
-            hijo: List[int] = self._cruzar(padre1, padre2)
-            hijo_mutado: List[int] = self._mutar(hijo)
+            hijo = self._cruzar(padre1, padre2)
+            hijo_mutado = self._mutar(hijo)
             nueva_poblacion.append(hijo_mutado)
 
-        indice_mejor: int = puntajes.index(max(puntajes))
-        mejor_individuo: List[int] = poblacion[indice_mejor]
-        mejor_fitness: float = puntajes[indice_mejor]
+        indice_mejor = puntajes.index(max(puntajes))
+        mejor_individuo = poblacion[indice_mejor]
+        mejor_fitness = puntajes[indice_mejor]
 
         return nueva_poblacion, mejor_individuo, mejor_fitness
-    
-        # -------------------------------------------------------------------------
-        # Métodos públicos
-        # -------------------------------------------------------------------------
 
-    def ejecutar_agrupamiento(self) -> Tuple[List[int], Dict[int, List[int]], Dict[int, float]]:
+    def _ejecutar_agrupamiento_genetico(
+        self,
+        grafica: nx.Graph,
+        limite: float,
+        reconectar: bool
+    ) -> Tuple[List[int], Dict[int, List[int]], Dict[int, float]]:
         """
-        Ejecuta el algoritmo genético elitista para generar una partición de los nodos en grupos,
-        respetando en la medida de lo posible el límite de peso definido.
+        Ejecuta el algoritmo genético elitista sobre la gráfica indicada (puede ser la principal o una subgráfica).
+        Devuelve la asignación de grupos (mejor individuo), así como diccionarios de grupos y pesos.
         
-        Regresa una tupla que contiene:
-          - mejor_individuo: Lista con la asignación de grupos para cada nodo.
-          - grupos: Diccionario (grupo -> lista de nodos).
-          - pesos_grupos: Diccionario (grupo -> peso total del grupo).
-        
-        :return: (mejor_individuo, grupos, pesos_grupos)
+        :param grafica: Gráfica de la cual se generará el agrupamiento.
+        :type grafica: nx.Graph
+        :param limite: Límite de peso para los grupos.
+        :type limite: float
+        :param reconectar: Indica si se deben reconectar aristas dentro de cada grupo al finalizar.
+        :type reconectar: bool
+        :return: Tupla (mejor_individuo, grupos, pesos_grupos).
         :rtype: Tuple[List[int], Dict[int, List[int]], Dict[int, float]]
-        :raises RuntimeError: Si no se encuentra ningún individuo válido.
+        :raises RuntimeError: Si no se logra encontrar un individuo válido tras las generaciones.
         """
-        # Se crea la población inicial.
-        poblacion: List[List[int]] = self._crear_poblacion()
-        mejor_fitness: float = float('-inf')
+        poblacion = self._crear_poblacion_inicial(grafica, limite)
+        mejor_fitness = float('-inf')
         mejor_individuo: Optional[List[int]] = None
 
-        # Se ejecuta la evolución genética por el número de generaciones especificado.
         for _ in tqdm(range(self.num_generaciones), desc="Generaciones", ncols=80):
-            poblacion, ind, fitness = self._evolucionar_poblacion(poblacion)
+            poblacion, ind, fitness = self._evolucion_poblacion(grafica, poblacion, limite)
             if fitness > mejor_fitness:
                 mejor_fitness = fitness
                 mejor_individuo = ind
@@ -469,34 +464,56 @@ class AgrupamientoAGEB:
         if mejor_individuo is None:
             raise RuntimeError("No se encontró un individuo válido.")
 
-        # Se construyen los diccionarios de grupos y pesos.
         grupos: Dict[int, List[int]] = {}
         pesos_grupos: Dict[int, float] = {}
-        for nodo, id_grupo in enumerate(mejor_individuo):
+        nodos_ordenados = list(grafica.nodes())
+
+        for i, nodo in enumerate(nodos_ordenados):
+            id_grupo = mejor_individuo[i]
             if id_grupo not in grupos:
                 grupos[id_grupo] = []
                 pesos_grupos[id_grupo] = 0.0
             grupos[id_grupo].append(nodo)
-            pesos_grupos[id_grupo] += self.gráfica.nodes[nodo]['peso']
+            pesos_grupos[id_grupo] += grafica.nodes[nodo]['peso']
 
-        # Se eliminan las aristas que conectan nodos de diferentes grupos.
-        aristas_eliminar: List[Tuple[int, int]] = []
-        for nodo_u, nodo_v in self.gráfica.edges():
-            if mejor_individuo[nodo_u] != mejor_individuo[nodo_v]:
-                aristas_eliminar.append((nodo_u, nodo_v))
-        self.gráfica.remove_edges_from(aristas_eliminar)
+        aristas_eliminar = []
+        for u, v in grafica.edges():
+            idx_u = nodos_ordenados.index(u)
+            idx_v = nodos_ordenados.index(v)
+            if mejor_individuo[idx_u] != mejor_individuo[idx_v]:
+                aristas_eliminar.append((u, v))
+        grafica.remove_edges_from(aristas_eliminar)
 
-        # Se reconectan internamente los nodos de cada grupo, de haber sido solicitado.
-        if self.reconectar_grupos:
+        if reconectar:
             for grupo, lista_nodos in grupos.items():
                 for i in range(len(lista_nodos)):
                     for j in range(i + 1, len(lista_nodos)):
                         nodo_u = lista_nodos[i]
                         nodo_v = lista_nodos[j]
-                        if not self.gráfica.has_edge(nodo_u, nodo_v):
-                            self.gráfica.add_edge(nodo_u, nodo_v)
+                        if not grafica.has_edge(nodo_u, nodo_v):
+                            grafica.add_edge(nodo_u, nodo_v)
 
         return mejor_individuo, grupos, pesos_grupos
+
+    # -------------------------------------------------------------------------
+    # Métodos públicos
+    # -------------------------------------------------------------------------
+
+    def ejecutar_agrupamiento(self) -> Tuple[List[int], Dict[int, List[int]], Dict[int, float]]:
+        """
+        Ejecuta el algoritmo genético elitista sobre la gráfica principal para encontrar
+        la mejor partición en grupos, respetando el límite de peso establecido.
+        
+        :return: Tupla con (mejor_individuo, grupos, pesos_grupos).
+        :rtype: Tuple[List[int], Dict[int, List[int]], Dict[int, float]]
+        """
+        # Se obtiene el límite a partir de los camiones (o se genera excepción si no existen).
+        limite_peso = self._obtener_limite_peso()
+        return self._ejecutar_agrupamiento_genetico(
+            grafica=self.gráfica,
+            limite=limite_peso,
+            reconectar=self.reconectar_grupos
+        )
 
     def asignar_camiones(
         self,
@@ -504,34 +521,34 @@ class AgrupamientoAGEB:
         pesos_grupos: Dict[int, float]
     ) -> Tuple[Dict[int, Optional[Camion]], List[Camion]]:
         """
-        Asigna camiones a los grupos de acuerdo con la capacidad efectiva (capacidad * factor_reserva).
+        Asigna camiones a los grupos generados según la capacidad efectiva de cada camión (capacidad * factor_reserva).
         
-        Se clasifican los grupos en:
-          1) Grupos "prioritarios": aquellos compuestos por un solo nodo y cuyo peso excede la capacidad mínima.
-          2) Grupos restantes: se asigna el camión de menor capacidad suficiente.
+        - Identifica "grupos prioritarios": aquellos de un solo nodo con peso que excede la capacidad mínima.
+        - Asigna dichos grupos prioritarios con camiones de mayor capacidad.
+        - Para el resto, se usa el camión más pequeño que sea suficiente.
         
-        :param grupos: Diccionario (grupo -> lista de nodos).
+        :param grupos: Diccionario que mapea el id de grupo a la lista de nodos que contiene.
         :type grupos: Dict[int, List[int]]
-        :param pesos_grupos: Diccionario (grupo -> peso total del grupo).
+        :param pesos_grupos: Diccionario que mapea el id de grupo a su peso total.
         :type pesos_grupos: Dict[int, float]
-        :return: Tupla con:
-                 - asignaciones: Diccionario (grupo -> camión asignado o None).
-                 - camiones_restantes: Lista de camiones no asignados.
+        :return: Tupla (asignaciones, camiones_restantes).
+                 - asignaciones: Diccionario que mapea cada grupo al camión asignado (o None).
+                 - camiones_restantes: Lista de camiones no utilizados.
         :rtype: Tuple[Dict[int, Optional[Camion]], List[Camion]]
         """
-        # Se expanden los camiones disponibles replicando cada tipo según su cantidad.
+        if not self.camiones:
+            return {g: None for g in grupos}, []
+
         camiones_disponibles: List[Camion] = []
-        for camion in self.camiones or []:
+        for camion in self.camiones:
             for _ in range(camion.cantidad_camiones):
                 camiones_disponibles.append(camion)
-        
+
         if not camiones_disponibles:
             return {g: None for g in grupos}, []
 
-        # Se determina la capacidad mínima efectiva.
         min_cap = min(c.capacidad * c.factor_reserva for c in camiones_disponibles)
 
-        # Se separan los grupos en prioritarios y restantes.
         grupos_prioritarios: Dict[int, List[int]] = {}
         grupos_restantes: Dict[int, List[int]] = {}
 
@@ -543,7 +560,6 @@ class AgrupamientoAGEB:
 
         asignaciones: Dict[int, Optional[Camion]] = {}
 
-        # (1) Se asignan los grupos prioritarios con camiones de mayor capacidad.
         camiones_disponibles.sort(key=lambda c: c.capacidad * c.factor_reserva, reverse=True)
         grupos_prioritarios_ordenados = sorted(
             grupos_prioritarios.items(),
@@ -551,7 +567,7 @@ class AgrupamientoAGEB:
             reverse=True
         )
 
-        for g, nodos in grupos_prioritarios_ordenados:
+        for g, _ in grupos_prioritarios_ordenados:
             peso_g = pesos_grupos[g]
             asignado = False
             for i, cam in enumerate(camiones_disponibles):
@@ -563,7 +579,6 @@ class AgrupamientoAGEB:
             if not asignado:
                 asignaciones[g] = None
 
-        # (2) Se asignan los grupos restantes usando la estrategia "camión más pequeño suficiente".
         camiones_disponibles.sort(key=lambda c: c.capacidad * c.factor_reserva)
         grupos_restantes_ordenados = sorted(
             grupos_restantes.items(),
@@ -571,7 +586,7 @@ class AgrupamientoAGEB:
             reverse=True
         )
 
-        for g, nodos in grupos_restantes_ordenados:
+        for g, _ in grupos_restantes_ordenados:
             peso_g = pesos_grupos[g]
             asignado = False
             for i, cam in enumerate(camiones_disponibles):
@@ -591,139 +606,24 @@ class AgrupamientoAGEB:
         limite_peso_sub: float
     ) -> Tuple[List[int], Dict[int, List[int]], Dict[int, float]]:
         """
-        Ejecuta el algoritmo genético elitista sobre un subgrupo de nodos que excede la capacidad de los camiones,
-        de forma que se busque subdividirlos en grupos más pequeños que se ajusten al límite especificado.
+        Ejecuta el algoritmo genético elitista sobre la subgráfica inducida por los nodos indicados,
+        con un límite de peso particular. Se utiliza comúnmente para subdividir grupos que exceden
+        la capacidad de los camiones.
         
-        Se utiliza una versión local del algoritmo genético sobre la subgráfica inducida por los nodos.
-        
-        :param nodos: Lista de nodos que conforman el grupo problemático.
+        :param nodos: Lista de nodos que conforman la subgráfica a agrupar.
         :type nodos: List[int]
-        :param limite_peso_sub: Límite de peso para cada subgrupo en el subgrupo.
+        :param limite_peso_sub: Límite de peso para los grupos en la subgráfica.
         :type limite_peso_sub: float
-        :return: Tupla (mejor_individuo, grupos_sub, pesos_sub) obtenida en el subagrupamiento.
+        :return: Tupla (mejor_individuo, grupos_sub, pesos_sub) con la mejor solución encontrada.
         :rtype: Tuple[List[int], Dict[int, List[int]], Dict[int, float]]
         """
-        # Se extrae la subgráfica a partir de los nodos indicados.
         subgrafica = self.gráfica.subgraph(nodos).copy()
-        lista_nodos = list(subgrafica.nodes())
-        num_nodos = len(lista_nodos)
-
-        # Se define una función local para crear la población inicial sobre la subgráfica.
-        def crear_poblacion_local() -> List[List[int]]:
-            poblacion_local: List[List[int]] = []
-            for _ in range(self.tamano_poblacion):
-                individuo: List[int] = [-1] * num_nodos
-                visitados: set = set()
-                grupo_actual: int = 0
-
-                for idx, nodo in enumerate(lista_nodos):
-                    if nodo not in visitados:
-                        peso_acum = subgrafica.nodes[nodo]['peso']
-                        nodos_grupo = [nodo]
-                        while nodos_grupo:
-                            actual = nodos_grupo.pop()
-                            pos = lista_nodos.index(actual)
-                            if individuo[pos] == -1:
-                                individuo[pos] = grupo_actual
-                                visitados.add(actual)
-                                for vecino in subgrafica.neighbors(actual):
-                                    if vecino not in visitados:
-                                        peso_vecino = subgrafica.nodes[vecino]['peso']
-                                        if peso_acum + peso_vecino <= limite_peso_sub:
-                                            nodos_grupo.append(vecino)
-                                            peso_acum += peso_vecino
-                        grupo_actual += 1
-                poblacion_local.append(individuo)
-            return poblacion_local
-
-        # Se define una función local para calcular el fitness sobre la subgráfica.
-        def calcular_fitness_local(individuo: List[int]) -> float:
-            puntaje = 0.0
-            pesos_local: Dict[int, float] = {}
-            for pos, nodo in enumerate(lista_nodos):
-                grupo = individuo[pos]
-                pesos_local[grupo] = pesos_local.get(grupo, 0.0) + subgrafica.nodes[nodo]['peso']
-            for peso in pesos_local.values():
-                if peso > limite_peso_sub:
-                    puntaje -= (peso - limite_peso_sub)
-            for u, v in subgrafica.edges():
-                pos_u = lista_nodos.index(u)
-                pos_v = lista_nodos.index(v)
-                if individuo[pos_u] == individuo[pos_v]:
-                    puntaje += 2.0
-                else:
-                    puntaje -= 1.0
-            return puntaje
-
-        def seleccionar_local(
-                poblacion_local: List[List[int]], 
-                puntajes_local: List[float], 
-                num_sel: int
-        ) -> List[List[int]]:
-            combinados = list(zip(poblacion_local, puntajes_local))
-            combinados.sort(key=lambda par: par[1], reverse=True)
-            elites = combinados[:self.elite_size]
-            mitad = combinados[:len(combinados)//2]
-            faltan = num_sel - self.elite_size
-            seleccion = mitad[self.elite_size:self.elite_size + faltan]
-            nueva_sel = elites + seleccion
-            return [ind for (ind, fit) in nueva_sel]
-
-        def cruzar_local(
-                p1: List[int], 
-                p2: List[int]
-        ) -> List[int]:
-            if len(p1) <= 2:
-                return p1
-            punto = random.randint(1, len(p1) - 2)
-            return p1[:punto] + p2[punto:]
-
-        def mutar_local(individuo: List[int]) -> List[int]:
-            max_gr = max(individuo)
-            for i in range(len(individuo)):
-                if random.random() < self.tasa_mutacion:
-                    individuo[i] = max_gr + 1
-            return individuo
-
-        def evolucionar_local(poblacion_local: List[List[int]]) -> Tuple[List[List[int]], List[int], float]:
-            puntajes_local = [calcular_fitness_local(ind) for ind in poblacion_local]
-            sel = seleccionar_local(poblacion_local, puntajes_local, num_sel=len(poblacion_local) // 2)
-            nueva_pobl = []
-            while len(nueva_pobl) < len(poblacion_local):
-                p1, p2 = random.sample(sel, 2)
-                hijo = cruzar_local(p1, p2)
-                hijo_mut = mutar_local(hijo)
-                nueva_pobl.append(hijo_mut)
-            idx_mejor = puntajes_local.index(max(puntajes_local))
-            return nueva_pobl, poblacion_local[idx_mejor], puntajes_local[idx_mejor]
-
-        # Se crea la población local.
-        poblacion_local = crear_poblacion_local()
-        mejor_fit = float('-inf')
-        mejor_individuo_local: Optional[List[int]] = None
-
-        # Se ejecuta la evolución local durante el número de generaciones especificado.
-        for _ in range(self.num_generaciones):
-            poblacion_local, ind_local, fit_local = evolucionar_local(poblacion_local)
-            if fit_local > mejor_fit:
-                mejor_fit = fit_local
-                mejor_individuo_local = ind_local
-
-        if mejor_individuo_local is None:
-            raise RuntimeError("No se encontró un individuo válido en el subagrupamiento.")
-
-        # Se construyen los grupos y se calculan los pesos usando el mejor individuo local.
-        grupos_sub: Dict[int, List[int]] = {}
-        pesos_sub: Dict[int, float] = {}
-        for pos, nodo in enumerate(lista_nodos):
-            grupo = mejor_individuo_local[pos]
-            if grupo not in grupos_sub:
-                grupos_sub[grupo] = []
-                pesos_sub[grupo] = 0.0
-            grupos_sub[grupo].append(nodo)
-            pesos_sub[grupo] += subgrafica.nodes[nodo]['peso']
-
-        return mejor_individuo_local, grupos_sub, pesos_sub
+        mejor_individuo, grupos_sub, pesos_sub = self._ejecutar_agrupamiento_genetico(
+            grafica=subgrafica,
+            limite=limite_peso_sub,
+            reconectar=False
+        )
+        return mejor_individuo, grupos_sub, pesos_sub
 
     def post_procesar_asignacion(
         self,
@@ -733,18 +633,21 @@ class AgrupamientoAGEB:
         camiones_restantes: List[Camion]
     ) -> Tuple[Dict[int, List[int]], Dict[int, float], Dict[int, Optional[Camion]]]:
         """
-        Procesa la asignación final, subdividiendo aquellos grupos sin camión asignado (debido a que su peso excede la capacidad)
-        mediante la aplicación del algoritmo genético elitista sobre los nodos no asignados.
+        Refina la asignación de camiones tras el agrupamiento inicial de la siguiente forma:
         
-        Se regresa la nueva estructura de grupos, sus pesos y asignaciones finales.
+        1) Subdivide los grupos que no cuentan con camión asignado (porque su peso excede la capacidad
+           de todos los camiones disponibles) mediante un nuevo agrupamiento (subgráfica).
+        2) Vuelve a asignar camiones a la estructura resultante.
+        3) Intenta reagrupar los subgrupos que provengan del mismo grupo original, si existe un camión
+           capaz de cubrirlos en conjunto.
         
-        :param grupos: Diccionario (grupo -> lista de nodos).
+        :param grupos: Diccionario original (grupo -> lista de nodos).
         :type grupos: Dict[int, List[int]]
-        :param pesos_grupos: Diccionario (grupo -> peso total).
+        :param pesos_grupos: Diccionario (grupo -> peso total del grupo).
         :type pesos_grupos: Dict[int, float]
-        :param asignaciones: Diccionario (grupo -> camión asignado o None).
+        :param asignaciones: Diccionario (grupo -> camión asignado o None) tras la asignación inicial.
         :type asignaciones: Dict[int, Optional[Camion]]
-        :param camiones_restantes: Lista de camiones no utilizados en la asignación inicial.
+        :param camiones_restantes: Lista de camiones que no se utilizaron en la asignación previa.
         :type camiones_restantes: List[Camion]
         :return: Tupla (nuevos_grupos, nuevos_pesos, nuevas_asignaciones).
         :rtype: Tuple[Dict[int, List[int]], Dict[int, float], Dict[int, Optional[Camion]]]
@@ -752,9 +655,8 @@ class AgrupamientoAGEB:
         if not camiones_restantes:
             print("No hay camiones restantes para intentar dividir ni reagrupar grupos.")
             return grupos, pesos_grupos, asignaciones
-    
-        # Se determina la mayor capacidad efectiva entre los camiones restantes.
-        capacidad_maxima: float = max(camion.capacidad * camion.factor_reserva for camion in camiones_restantes)
+
+        capacidad_maxima = max(c.capacidad * c.factor_reserva for c in camiones_restantes)
 
         nuevos_grupos: Dict[int, List[int]] = {}
         nuevos_pesos: Dict[int, float] = {}
@@ -762,21 +664,18 @@ class AgrupamientoAGEB:
         grupo_padre: Dict[int, int] = {}
         id_nuevo: int = 0
 
-        # Se recorren los grupos existentes para decidir si se mantienen o se subdividen.
-        for id_grupo, nodos in grupos.items():
-            peso_grupo = pesos_grupos[id_grupo]
+        for id_grupo, nodos_grupo in grupos.items():
+            peso_g = pesos_grupos[id_grupo]
             camion_asignado = asignaciones[id_grupo]
 
-            # Si el grupo ya está asignado o su peso es menor o igual a la capacidad máxima, se conserva tal cual.
-            if (camion_asignado is not None) or (peso_grupo <= capacidad_maxima):
-                nuevos_grupos[id_nuevo] = nodos
-                nuevos_pesos[id_nuevo] = peso_grupo
+            if camion_asignado is not None or peso_g <= capacidad_maxima:
+                nuevos_grupos[id_nuevo] = nodos_grupo
+                nuevos_pesos[id_nuevo] = peso_g
                 grupo_padre[id_nuevo] = id_grupo
                 id_nuevo += 1
             else:
-                # Para el grupo sin asignación y demasiado pesado se aplica el algoritmo genético elitista
-                # sobre los nodos problemáticos para intentar subdividirlos en grupos más pequeños.
-                _, subgrupos, pesos_sub = self.ejecutar_agrupamiento_subgrupo(nodos, capacidad_maxima)
+                _, subgrupos, pesos_sub = self.ejecutar_agrupamiento_subgrupo(nodos_grupo, capacidad_maxima)
+
                 for sub in subgrupos.values():
                     peso_sub = sum(self.gráfica.nodes[n]['peso'] for n in sub)
                     nuevos_grupos[id_nuevo] = sub
@@ -784,10 +683,8 @@ class AgrupamientoAGEB:
                     grupo_padre[id_nuevo] = id_grupo
                     id_nuevo += 1
 
-        # Se asignan camiones a la nueva estructura de grupos.
         nuevas_asignaciones, camiones_sobrantes = self.asignar_camiones(nuevos_grupos, nuevos_pesos)
 
-        # Se intenta reagrupar subgrupos que correspondan al mismo grupo original, de haber camión suficiente.
         padre_a_subgrupos: Dict[int, List[int]] = {}
         for sub_id, p_id in grupo_padre.items():
             padre_a_subgrupos.setdefault(p_id, []).append(sub_id)
@@ -807,9 +704,11 @@ class AgrupamientoAGEB:
             todos_nodos = []
             for sid in lista_sub_ids:
                 todos_nodos.extend(nuevos_grupos[sid])
+
             nuevo_id = min(lista_sub_ids)
             nuevos_grupos[nuevo_id] = todos_nodos
             nuevos_pesos[nuevo_id] = peso_total
+
             for sid in lista_sub_ids:
                 if sid != nuevo_id:
                     if sid in nuevos_grupos:
@@ -818,6 +717,7 @@ class AgrupamientoAGEB:
                         del nuevos_pesos[sid]
                     if sid in nuevas_asignaciones:
                         del nuevas_asignaciones[sid]
+
             camion_elegido = None
             for i, c in enumerate(camiones_sobrantes):
                 if c.capacidad * c.factor_reserva >= peso_total:
@@ -835,39 +735,40 @@ class AgrupamientoAGEB:
         output_path: Optional[str] = None
     ) -> None:
         """
-        Genera una gráfica (mediante matplotlib) en la que se visualiza la red de nodos 
-        coloreados según el camión asignado. 
+        Genera una visualización que muestra los nodos y sus conexiones, coloreando cada grupo
+        de acuerdo con el camión asignado. Los grupos sin camión se representan en rojo. 
         Si `output_path` está definido, se guarda la figura en esa ruta en lugar de mostrarla.
+        
+        :param grupos: Diccionario (grupo -> lista de nodos).
+        :type grupos: Dict[int, List[int]]
+        :param asignaciones: Diccionario (grupo -> camión o None).
+        :type asignaciones: Dict[int, Optional[Camion]]
         """
         posiciones: Dict[Any, Tuple[float, float]] = {
             indice: (fila.geometry.centroid.x, fila.geometry.centroid.y)
             for indice, fila in self.gdf.iterrows()
         }
 
-        # Colores base para camiones
         colores_base: List[str] = [
             'blue', 'green', 'orange', 'purple',
             'brown', 'pink', 'gray', 'olive',
             'cyan', 'magenta'
         ]
-
-        # Mapear cada nombre de camión con un color
         colores_por_camion: Dict[str, str] = {}
         nombres_asignados: List[str] = []
 
         if self.camiones:
             for indice, camion in enumerate(self.camiones):
-                color: str = colores_base[indice % len(colores_base)]
+                color_camion = colores_base[indice % len(colores_base)]
                 if camion.nombre not in nombres_asignados:
-                    colores_por_camion[camion.nombre] = color
+                    colores_por_camion[camion.nombre] = color_camion
                     nombres_asignados.append(camion.nombre)
 
-        # Asignar color a cada nodo según el camión correspondiente
         mapa_colores: Dict[int, str] = {}
         for id_grupo, lista_nodos in grupos.items():
-            camion: Optional[Camion] = asignaciones.get(id_grupo, None)
+            camion = asignaciones.get(id_grupo, None)
             if camion is not None:
-                color_grupo: str = colores_por_camion.get(camion.nombre, 'blue')
+                color_grupo = colores_por_camion.get(camion.nombre, 'blue')
             else:
                 color_grupo = 'red'
             for nodo in lista_nodos:
@@ -880,23 +781,21 @@ class AgrupamientoAGEB:
             posiciones,
             node_color=[mapa_colores[nodo] for nodo in self.gráfica.nodes()],
             with_labels=True,
-            node_size=[
-                (self.gráfica.nodes[nodo]['peso'] * self.factor_basura) / 50 
-                for nodo in self.gráfica.nodes()
-            ],
+            node_size=[(self.gráfica.nodes[nodo]['peso'] * self.factor_basura) / 50
+                       for nodo in self.gráfica.nodes()],
             edge_color="gray"
         )
 
-        # Leyenda
         leyenda: List[Patch] = []
         camiones_agregados: set = set()
         for id_grupo, camion in asignaciones.items():
             if camion is not None and camion.nombre not in camiones_agregados:
-                color_camion: str = colores_por_camion[camion.nombre]
-                leyenda.append(Patch(facecolor=color_camion, edgecolor='black', label=camion.nombre))
+                color_camion = colores_por_camion[camion.nombre]
+                leyenda.append(
+                    Patch(facecolor=color_camion, edgecolor='black', label=camion.nombre)
+                )
                 camiones_agregados.add(camion.nombre)
 
-        # Para grupos sin camión
         if any(camion is None for camion in asignaciones.values()):
             leyenda.append(Patch(facecolor='red', edgecolor='black', label='Sin asignación'))
 
@@ -909,15 +808,11 @@ class AgrupamientoAGEB:
         else:
             plt.show()
 
-    def guardar_resultados(
-        self,
-        mejor_individuo: List[int],
-        archivo: str 
-    ) -> None:
+    def guardar_resultados(self, mejor_individuo: List[int], archivo: str) -> None:
         """
-        Guarda el mejor individuo (solución del agrupamiento) en un archivo JSON.
+        Guarda la asignación de grupos del mejor individuo (solución resultante) en un archivo JSON.
         
-        :param mejor_individuo: Asignación de grupos para cada nodo en la mejor solución encontrada.
+        :param mejor_individuo: Lista que asigna a cada nodo el grupo correspondiente.
         :type mejor_individuo: List[int]
         :param archivo: Ruta o nombre del archivo en el que se almacenarán los resultados.
         :type archivo: str
