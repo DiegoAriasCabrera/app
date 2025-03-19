@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}
+  Resultados de Agrupamiento
+{% endblock title %}
+
+{% block content %}
+<h1>Resultados de Agrupamiento para {{ alcaldia }}</h1>
+
+<p>Se crearon {{ num_grupos }} grupos.</p>
+<p>A continuación se muestra el mapa resultante:</p>
+<img src="{{ imagen_url }}" alt="Resultado del agrupamiento" style="max-inline-size:80%; border:1px solid #333;">
+{% endblock content %}

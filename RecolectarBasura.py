@@ -7,6 +7,8 @@ import pandas as pd
 import networkx as nx
 from tqdm import tqdm
 import geopandas as gpd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from shapely.geometry import LineString

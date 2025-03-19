@@ -1,21 +1,18 @@
+# app.py
 import os
 import json
-import uuid
-import time
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, Response
-from RecolectarBasura import Camion, AgrupamientoAGEB, ProcesadorCalles
-from tqdm import tqdm
-import matplotlib.pyplot as plt
+import geopandas as gpd
+from flask import Flask, request, jsonify, render_template, redirect, url_for, send_from_directory, session
+from RecolectarBasura import AgrupamientoAGEB, Camion
 
 app = Flask(__name__)
-app.secret_key = "TU_SUPER_SECRETO"
+app.secret_key = "SOME_RANDOM_SECRET_KEY"
 
 
 @app.route('/')
 def index():
     """
-    Muestra la lista de alcaldías, pero ahora tenemos la lógica en /Alcaldías
-    o podrías redirigir a una página 'index.html' con botones.
+    Redirige a la lista de alcaldías.
     """
     return redirect(url_for('listar_alcaldias'))
 
@@ -31,236 +28,191 @@ def listar_alcaldias():
     if os.path.exists(alcaldias_dir):
         for archivo in os.listdir(alcaldias_dir):
             if archivo.endswith('.shp'):
-                # Se extrae el nombre sin la extensión
+                # Se extrae el nombre sin extensión
                 nombre_alcaldia = os.path.splitext(archivo)[0]
                 alcaldias.append(nombre_alcaldia)
     else:
         return jsonify({'error': 'No se encontró la carpeta de alcaldías.'}), 404
 
-    return render_template('Alcaldías.html', alcaldías=alcaldias)
+    # Opción: Ver si se seleccionó una en la session
+    seleccionada = session.get('alcaldia', None)
+
+    return render_template('Alcaldías.html', alcaldías=alcaldias, seleccionada=seleccionada)
 
 
 @app.route('/seleccionar_alcaldia', methods=['POST'])
 def seleccionar_alcaldia():
     """
-    Recibe la alcaldía seleccionada del formulario y redirige 
-    a la pantalla donde se configuran camiones y parámetros.
+    Recibe la alcaldía seleccionada del formulario y la guarda en session
+    para volver a renderizar la página con la alcaldía elegida.
     """
     alcaldia = request.form.get('alcaldía')
     if not alcaldia:
         return redirect(url_for('listar_alcaldias'))
-    # Redirige a la ruta donde se piden datos de camiones
-    return redirect(url_for('agregar_camiones', alcaldia=alcaldia))
+
+    session['alcaldia'] = alcaldia
+    # Regresamos a /Alcaldías (GET) para que muestre los camiones y parámetros
+    return redirect(url_for('listar_alcaldias'))
 
 
-@app.route('/Alcaldías/<alcaldia>/agregar_camiones', methods=['GET', 'POST'])
-def agregar_camiones(alcaldia):
-    """
-    Muestra el mismo template Alcaldías.html (pero con la alcaldía seleccionada) 
-    para capturar camiones y parámetros.
-    """
-    if request.method == 'POST':
-        # Guardar los datos del formulario en la sesión
-        session['tamano_poblacion'] = request.form.get('agrupamiento[tamano_poblacion]')
-        session['num_generaciones'] = request.form.get('agrupamiento[num_generaciones]')
-        session['tasa_mutacion'] = request.form.get('agrupamiento[tasa_mutacion]')
-        session['factor_basura'] = request.form.get('agrupamiento[factor_basura]')
-        
-        camiones = []
-        for key in request.form.keys():
-            if key.startswith('camiones'):
-                camiones.append(request.form.get(key))
-        session['camiones'] = camiones
-
-        # Redirige a la ruta donde se piden datos de camiones
-        return redirect(url_for('pagina_sse', alcaldia=alcaldia))
-
-    # Renderiza la plantilla con la alcaldía seleccionada
-    # (El "alcaldías=[]" es para que no se muestren de nuevo en el select)
-    return render_template('Alcaldías.html', alcaldías=[alcaldia], seleccionada=alcaldia)
-
-
-@app.route('/Alcaldías/<alcaldia>/sse')
-def pagina_sse(alcaldia):
-    """
-    Esta ruta renderiza un HTML (index.html o algo similar)
-    que abrirá EventSource("/Alcaldías/<alcaldia>/progreso_agrupamiento") 
-    y mostrará las barras de progreso de ambos procesos.
-    """
-    return render_template('index.html', alcaldia=alcaldia)
-
-
-@app.route('/Alcaldías/<alcaldia>/progreso_agrupamiento')
+@app.route('/Alcaldías/<alcaldia>/progreso_agrupamiento', methods=['POST'])
 def progreso_agrupamiento(alcaldia):
     """
-    1) Recoge datos de session o algo similar (o se los pasa en param),
-    2) Ejecuta AgrupamientoAGEB con tqdm, enviando SSE.
-    3) Al terminar, manda "DONE" y genera su imagen en /temp.
+    Ejecuta el proceso de agrupamiento con la clase AgrupamientoAGEB y 
+    guarda los resultados (JSON + imagen) en temp/.
+    Luego redirige a mostrar_resultados/<alcaldia>.
     """
-    # Recuperar los datos de la sesión
-    tamano_poblacion = int(session.get('tamano_poblacion', 50))
-    num_generaciones = int(session.get('num_generaciones', 10))
-    tasa_mutacion = float(session.get('tasa_mutacion', 0.01))
-    factor_basura = float(session.get('factor_basura', 1.071))
-    reconectar_grupos = True
-    semilla_random = None
 
-    # Recuperar los camiones de la sesión
-    camiones_data = session.get('camiones', [])
+    # 1) Leer parámetros del formulario
+    tamano_poblacion = request.form.get('agrupamiento[tamano_poblacion]', type=int)
+    num_generaciones = request.form.get('agrupamiento[num_generaciones]', type=int)
+    tasa_mutacion    = request.form.get('agrupamiento[tasa_mutacion]', type=float)
+    factor_basura    = request.form.get('agrupamiento[factor_basura]', type=float)
+
+    # 2) Parsear camiones
     camiones = []
-    for i in range(0, len(camiones_data), 4):
-        camiones.append(Camion(
-            capacidad=float(camiones_data[i+1]),
-            factor_reserva=float(camiones_data[i+2]),
-            cantidad_camiones=int(camiones_data[i+3]),
-            nombre=camiones_data[i]
-        ))
+    i = 0
+    while True:
+        nombre_key      = f"camiones[{i}][nombre]"
+        capacidad_key   = f"camiones[{i}][capacidad]"
+        reserva_key     = f"camiones[{i}][factor_reserva]"
+        cantidad_key    = f"camiones[{i}][cantidad_camiones]"
+        if nombre_key in request.form:
+            # Convertimos valores
+            nombre_camion = request.form.get(nombre_key)
+            capacidad     = float(request.form.get(capacidad_key, 0))
+            factor_res    = float(request.form.get(reserva_key, 1))
+            cant          = int(request.form.get(cantidad_key, 0))
 
-    shapefile_path = os.path.join(app.root_path, 'Alcaldías', f'{alcaldia}.shp')
-    if not os.path.exists(shapefile_path):
-        def gen_err():
-            yield "data: ERROR\n\n"
-        return Response(gen_err(), mimetype="text/event-stream")
+            c = Camion(
+                capacidad=capacidad,
+                factor_reserva=factor_res,
+                cantidad_camiones=cant,
+                nombre=nombre_camion
+            )
+            camiones.append(c)
+            i += 1
+        else:
+            break
 
-    def generate():
-        # Instanciamos el agrupador
-        agrupador = AgrupamientoAGEB(
-            ruta_shp=shapefile_path,
-            tamano_poblacion=tamano_poblacion,
-            num_generaciones=num_generaciones,
-            tasa_mutacion=tasa_mutacion,
-            factor_basura=factor_basura,
-            camiones=camiones,
-            reconectar_grupos=reconectar_grupos,
-            semilla_random=semilla_random
-        )
+    # 3) Validar que existan todos los parámetros y al menos un camión
+    if (not tamano_poblacion or not num_generaciones or 
+        not tasa_mutacion or not factor_basura or len(camiones) == 0):
+        return jsonify({'error': 'Faltan parámetros o camiones para el agrupamiento.'}), 400
 
-        # Creamos la población inicial
-        poblacion = agrupador._crear_poblacion()
-        mejor_fitness = float('-inf')
-        mejor_individuo = None
+    # 4) Verificar que existe el shapefile de la alcaldía
+    ruta_shp = os.path.join(app.root_path, 'Alcaldías', f'{alcaldia}.shp')
+    if not os.path.exists(ruta_shp):
+        return jsonify({'error': f'No se encontró el shapefile para {alcaldia}.'}), 404
 
-        for i in tqdm(range(num_generaciones), desc="Agrupando"):
-            poblacion, ind, fitness = agrupador._evolucionar_poblacion(poblacion)
-            if fitness > mejor_fitness:
-                mejor_fitness = fitness
-                mejor_individuo = ind
+    # 5) Crear la instancia de AgrupamientoAGEB
+    agrupador = AgrupamientoAGEB(
+        ruta_shp=ruta_shp,
+        tamano_poblacion=tamano_poblacion,
+        num_generaciones=num_generaciones,
+        tasa_mutacion=tasa_mutacion,
+        factor_basura=factor_basura,
+        camiones=camiones,
+        reconectar_grupos=True
+    )
 
-            # Mandamos SSE con un porcentaje
-            porc = int((i+1) * 100 / num_generaciones)
-            yield f"data: {porc}\n\n"
-            time.sleep(0.1)  # simulamos retardo
+    # 6) Ejecutar el agrupamiento
+    mejor_individuo, grupos, pesos_grupos = agrupador.ejecutar_agrupamiento()
 
-        if not mejor_individuo:
-            yield "data: ERROR\n\n"
-            return
+    # 7) Asignar camiones
+    asignaciones, camiones_restantes = agrupador.asignar_camiones(grupos, pesos_grupos)
 
-        # Creamos la asignación final
-        grupos, pesos_grupos = {}, {}
-        for nodo, id_grupo in enumerate(mejor_individuo):
-            grupos.setdefault(id_grupo, []).append(nodo)
-            pesos_grupos[id_grupo] = pesos_grupos.get(id_grupo, 0.0) + agrupador.gráfica.nodes[nodo]['peso']
+    # 8) Post-procesar
+    nuevos_grupos, nuevos_pesos, nuevas_asignaciones = agrupador.post_procesar_asignacion(
+        grupos, pesos_grupos, asignaciones, camiones_restantes
+    )
 
-        asignaciones, camiones_restantes = agrupador.asignar_camiones(grupos, pesos_grupos)
+    # 9) Graficar y guardar la imagen
+    carpeta_imagenes = os.path.join(app.root_path, 'temp', 'imagenes')
+    os.makedirs(carpeta_imagenes, exist_ok=True)
+    ruta_img = os.path.join(carpeta_imagenes, f"{alcaldia}_agrupamiento.png")
+    agrupador.graficar_con_camiones(nuevos_grupos, nuevas_asignaciones, output_path=ruta_img)
 
-        # Guardar un JSON
-        resultado_agrupamiento_dir = os.path.join(app.root_path, 'resultado_agrupamiento')
-        os.makedirs(resultado_agrupamiento_dir, exist_ok=True)
-        json_filename = f"agrupamiento_{alcaldia}_{uuid.uuid4().hex}.json"
-        json_path = os.path.join(resultado_agrupamiento_dir, json_filename)
-        resultado = {
-            "alcaldia": alcaldia,
-            "mejor_individuo": mejor_individuo,
-            "num_generaciones": num_generaciones,
-            "asignaciones": {str(g): (camion.nombre if camion else None)
-                             for g, camion in asignaciones.items()}
-        }
-        with open(json_path, 'w', encoding='utf-8') as jf:
-            json.dump(resultado, jf, ensure_ascii=False, indent=2)
+    # 10) Guardar el mejor_individuo en temp/agrupamiento
+    carpeta_agrupamiento = os.path.join(app.root_path, 'temp', 'agrupamiento')
+    os.makedirs(carpeta_agrupamiento, exist_ok=True)
+    ruta_json = os.path.join(carpeta_agrupamiento, f"{alcaldia}_mejor_agrupamiento.json")
+    agrupador.guardar_resultados(mejor_individuo, ruta_json)
 
-        # Generar imagen
-        image_filename = f"agrupamiento_{alcaldia}_{uuid.uuid4().hex}.png"
-        image_path = os.path.join(resultado_agrupamiento_dir, image_filename)
+    # 11) Redirigir a mostrar_resultados
+    return redirect(url_for('mostrar_resultados', alcaldia=alcaldia))
 
-        # Si tu clase ya soporta output_path:
-        agrupador.graficar_con_camiones(grupos, asignaciones, output_path=image_path)
 
-        # Guardamos la info en session para que la segunda SSE (procesadorCalles) sepa 
-        session['agrup_img'] = image_filename
-
-        # Al terminar, enviamos "DONE"
-        yield "data: DONE\n\n"
-
-    return Response(generate(), mimetype="text/event-stream")
-@app.route('/Alcaldías/<alcaldia>/progreso_calles')
-def progreso_calles(alcaldia):
+@app.route('/mostrar_resultados/<alcaldia>', methods=['GET'])
+def mostrar_resultados(alcaldia):
     """
-    Segundo proceso (ProcesadorCalles), también largo.
-    Usa SSE + tqdm, y al final manda "DONE2" y genera la imagen en /temp.
+    Carga el JSON de agrupamiento, parte el shapefile en sectores
+    y muestra la imagen final en la plantilla 'mostrar_resultados.html'.
     """
-    def generate():
-        # Vamos a simular 10 iteraciones
-        total = 10
+    # 1) Ruta JSON
+    carpeta_agrupamiento = os.path.join(app.root_path, 'temp', 'agrupamiento')
+    ruta_json = os.path.join(carpeta_agrupamiento, f"{alcaldia}_mejor_agrupamiento.json")
+    if not os.path.exists(ruta_json):
+        return f"No existe el archivo de agrupamiento para {alcaldia}", 404
 
-        # Instanciamos algo de tu clase:
-        temp_dir = os.path.join(app.root_path, "temp")
-        aristas_global = os.path.join(app.root_path, "CDMX_aristas.shp")
-        nodos_global   = os.path.join(app.root_path, "CDMX_nodos.shp")
-        carpeta_sectores = os.path.join(app.root_path, "sectores")
+    with open(ruta_json, 'r', encoding='utf-8') as file:
+        mejor_agrupamiento = json.load(file)
+    if isinstance(mejor_agrupamiento, list):
+        mejor_agrupamiento = {i: grp for i, grp in enumerate(mejor_agrupamiento)}
 
-        if not os.path.exists(aristas_global):
-            yield "data: ERROR\n\n"
-            return
+    # 2) Cargar shapefile
+    ruta_shp = os.path.join(app.root_path, 'Alcaldías', f'{alcaldia}.shp')
+    if not os.path.exists(ruta_shp):
+        return f"No existe el shapefile para {alcaldia}", 404
 
-        pc = ProcesadorCalles(
-            aristas_cdmx_shp=aristas_global,
-            nodos_cdmx_shp=nodos_global,
-            carpeta_sectores=carpeta_sectores,
-            carpeta_salida_calles=os.path.join(temp_dir,"calles_salida"),
-            carpeta_salida_nodos=os.path.join(temp_dir,"nodos_salida"),
-            carpeta_salida_final=os.path.join(temp_dir,"calles_final")
-        )
+    gdf_ageb = gpd.read_file(ruta_shp)
+    if gdf_ageb.empty:
+        return "El shapefile está vacío.", 400
 
-        # Simulamos un método largo recortar_red_vial_por_sectores
-        # y mientras tanto enviamos SSE:
-        for i in tqdm(range(total), desc="Calles"):
-            time.sleep(0.3)
-            porc = int((i+1)*100/total)
-            yield f"data: {porc}\n\n"
+    # 3) Generar sectores en /temp/sectores/<alcaldia>/
+    carpeta_sectores_alcaldia = os.path.join(app.root_path, 'temp', 'sectores', alcaldia)
+    os.makedirs(carpeta_sectores_alcaldia, exist_ok=True)
 
-        calles_img_filename = f"calles_{uuid.uuid4().hex}.png"
-        calles_img_path = os.path.join(temp_dir, calles_img_filename)
+    grupos_dict = {}
+    for idx, row in gdf_ageb.iterrows():
+        if idx not in mejor_agrupamiento:
+            continue
+        grupo = mejor_agrupamiento[idx]
+        if grupo not in grupos_dict:
+            grupos_dict[grupo] = []
+        grupos_dict[grupo].append(row)
 
-        plt.figure()
-        plt.title("Resultado ProcesadorCalles")
-        plt.plot([0,1,2],[2,1,2],'g-')
-        plt.savefig(calles_img_path)
-        plt.close()
+    for grupo_id, rows in grupos_dict.items():
+        subset_gdf = gpd.GeoDataFrame(rows, crs=gdf_ageb.crs)
+        subset_gdf['grupo'] = grupo_id
+        ruta_sector = os.path.join(carpeta_sectores_alcaldia, f"Sector_{grupo_id}.shp")
+        subset_gdf.to_file(ruta_sector, driver='ESRI Shapefile')
 
-        session['calles_img'] = calles_img_filename
+    # 4) Imagen
+    carpeta_imagenes = os.path.join(app.root_path, 'temp', 'imagenes')
+    nombre_imagen = f"{alcaldia}_agrupamiento.png"
+    ruta_imagen = os.path.join(carpeta_imagenes, nombre_imagen)
+    if not os.path.exists(ruta_imagen):
+        return f"No se encontró la imagen de agrupamiento para {alcaldia}", 404
 
-        yield "data: DONE2\n\n"
-
-    return Response(generate(), mimetype="text/event-stream")
-
-
-@app.route('/final')
-def final():
-    """
-    Muestra la página final con ambas imágenes:
-    la del agrupamiento y la de calles.
-    """
-    agr = session.get('agrup_img')
-    cal = session.get('calles_img')
+    # 5) Renderizar template con la imagen
     return render_template(
-        'resultado_final.html',
-        alcaldia='DESCONOCIDA',
-        image_agrup=f"temp/{agr}" if agr else None,
-        image_calles=f"temp/{cal}" if cal else None
+        'mostrar_resultados.html',
+        alcaldia=alcaldia,
+        num_grupos=len(grupos_dict),
+        imagen_url=url_for('ver_imagen', alcaldia=alcaldia)
     )
 
 
+@app.route('/ver_imagen/<alcaldia>')
+def ver_imagen(alcaldia):
+    """
+    Sirve la imagen desde la carpeta temp/imagenes usando send_from_directory.
+    """
+    carpeta_imagenes = os.path.join(app.root_path, 'temp', 'imagenes')
+    nombre_imagen = f"{alcaldia}_agrupamiento.png"
+    return send_from_directory(carpeta_imagenes, nombre_imagen)
+
+
 if __name__ == '__main__':
-    # En modo debug no hay timeout. Para producción:
-    # gunicorn --timeout 600 app:app
     app.run(debug=True, port=5005)
