@@ -1,4 +1,3 @@
-# app.py
 import os
 import json
 import geopandas as gpd
@@ -6,8 +5,7 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, s
 from RecolectarBasura import AgrupamientoAGEB, Camion
 
 app = Flask(__name__)
-app.secret_key = "SOME_RANDOM_SECRET_KEY"
-
+app.secret_key = os.urandom(32)
 
 @app.route('/')
 def index():
@@ -34,7 +32,6 @@ def listar_alcaldias():
     else:
         return jsonify({'error': 'No se encontró la carpeta de alcaldías.'}), 404
 
-    # Opción: Ver si se seleccionó una en la session
     seleccionada = session.get('alcaldia', None)
 
     return render_template('Alcaldías.html', alcaldías=alcaldias, seleccionada=seleccionada)
