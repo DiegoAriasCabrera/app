@@ -10,4 +10,9 @@
 <p>Se crearon {{ num_grupos }} grupos.</p>
 <p>A continuación se muestra el mapa resultante:</p>
 <img src="{{ imagen_url }}" alt="Resultado del agrupamiento" style="max-inline-size:80%; border:1px solid #333;">
+
+<!-- Botón para exportar sectores -->
+<form action="{{ url_for('exportar_sectores', alcaldia=alcaldia) }}" method="post" style="margin-block-start:20px;">
+  <button type="submit">Continuar</button>
+</form>
 {% endblock content %}

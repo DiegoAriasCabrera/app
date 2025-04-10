@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}
+  Exportación de Sectores Exitosa
+{% endblock title %}
+
+{% block content %}
+<h1>Exportación de Sectores para {{ alcaldia }}</h1>
+<p>Los sectores han sido exportados correctamente a la carpeta designada.</p>
+
+<!-- Botón para procesar la red vial (calles y nodos) -->
+<form action="{{ url_for('procesar_calles', alcaldia=alcaldia) }}" method="post" style="margin-block-start:20px;">
+  <button type="submit">Procesar Calles</button>
+</form>
+{% endblock content %}

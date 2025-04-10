@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}
+  Procesamiento de Calles Exitoso
+{% endblock title %}
+
+{% block content %}
+<h1>Procesamiento de la Red Vial para {{ alcaldia }}</h1>
+<p>La red vial ha sido recortada y corregida exitosamente.</p>
+<!-- Puede incluir enlaces o botones para descargar los shapefiles o volver al inicio -->
+<a href="{{ url_for('listar_alcaldias') }}">Volver al inicio</a>
+{% endblock content %}

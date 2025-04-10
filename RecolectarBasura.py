@@ -19,9 +19,9 @@ from typing import List, Dict, Tuple, Union, Optional, Any
 # ============================================================================
 class ErrorShapefile(Exception):
     """
-    Indica que ocurrió un problema relacionado con archivos shapefile.
-
-    :param mensaje: Mensaje descriptivo del problema ocurrido.
+    Excepción personalizada para errores relacionados con los shapefiles.
+    
+    :param mensaje: Mensaje descriptivo del error ocurrido.
     :type mensaje: str
     """
     def __init__(self, mensaje: str) -> None:
@@ -30,10 +30,10 @@ class ErrorShapefile(Exception):
 
 class ErrorRedVial(Exception):
     """
-    Indica que ocurrió un problema al construir o manejar la red vial,
-    conformada por nodos y aristas.
-
-    :param mensaje: Mensaje descriptivo del problema ocurrido.
+    Excepción personalizada para errores relacionados con la construcción o el manejo de la red vial
+    (gráfica de nodos y aristas).
+    
+    :param mensaje: Mensaje descriptivo del error ocurrido.
     :type mensaje: str
     """
     def __init__(self, mensaje: str) -> None:
@@ -43,18 +43,18 @@ class ErrorRedVial(Exception):
 # ============================================================================
 # Clase Camion
 # ============================================================================
+
 class Camion:
     """
-    Representa un camión que incluye información de capacidad, factor de reserva,
-    cantidad disponible y un identificador.
-
+    Representa un camión con información de capacidad, factor de reserva, cantidad disponible y un nombre identificador.
+    
     :param capacidad: Capacidad máxima del camión (peso máximo de carga).
     :type capacidad: float
-    :param factor_reserva: Factor multiplicador para incluir margen adicional de capacidad.
+    :param factor_reserva: Factor multiplicador para otorgar margen adicional a la capacidad.
     :type factor_reserva: float
-    :param cantidad_camiones: Cantidad de camiones de este tipo disponibles.
+    :param cantidad_camiones: Número de camiones de este tipo disponibles.
     :type cantidad_camiones: int
-    :param nombre: Nombre o identificador del camión.
+    :param nombre: Identificador o nombre del camión.
     :type nombre: str
     """
 
@@ -65,17 +65,26 @@ class Camion:
         cantidad_camiones: int,
         nombre: str
     ) -> None:
-
+        """
+        Inicializa una nueva instancia de la clase Camion con los valores provistos.
+        """
+        # Se asigna la capacidad nominal sin considerar el factor de reserva.
         self.capacidad: float = capacidad
+
+        # Se asigna el factor de reserva para considerar margen adicional.
         self.factor_reserva: float = factor_reserva
+
+        # Se asigna el número de camiones disponibles de este tipo.
         self.cantidad_camiones: int = cantidad_camiones
+
+        # Se asigna el identificador o nombre del camión.
         self.nombre: str = nombre
 
     def __repr__(self) -> str:
         """
-        Devuelve la representación en cadena del objeto Camion.
-
-        :return: La representación del camión en el formato "Camion(nombre, Capacidad=..., Cantidad=...)".
+        Regresa una representación en cadena del objeto Camion.
+        
+        :return: Representación del camión en el formato Camion(nombre, Capacidad=..., Cantidad=...).
         :rtype: str
         """
         return f"Camion({self.nombre}, Capacidad={self.capacidad}, Cantidad={self.cantidad_camiones})"
@@ -84,107 +93,122 @@ class Camion:
 # ============================================================================
 # Clase AgrupamientoAGEB
 # ============================================================================
+
 class AgrupamientoAGEB:
     """
-    Administra el proceso de agrupamiento de nodos mediante un algoritmo genético elitista.
-    Facilita la asignación de camiones a cada grupo resultante y permite ajustar la asignación
-    si se detectan grupos con sobrepeso.
-
-    :param ruta_shp: Ruta al archivo Shapefile con información de las AGEB.
+    Gestiona el proceso de agrupamiento de nodos (AGEBs) mediante un algoritmo genético elitista.
+    Además, facilita la asignación de camiones para cada grupo resultante y permite el posterior
+    ajuste de la asignación si es necesario subdividir grupos con sobrepeso.
+    
+    :param ruta_shp: Ruta al archivo Shapefile que contiene la información de las AGEBs.
     :type ruta_shp: str
-    :param tamano_poblacion: Cantidad de individuos en la población inicial del algoritmo genético.
+    :param tamano_poblacion: Tamaño de la población inicial del algoritmo genético.
     :type tamano_poblacion: int
-    :param num_generaciones: Número de generaciones para la ejecución del algoritmo genético.
+    :param num_generaciones: Número de iteraciones (generaciones) que ejecutará el algoritmo genético.
     :type num_generaciones: int
-    :param tasa_mutacion: Probabilidad de mutación de cada gen (nodo) en un individuo.
+    :param tasa_mutacion: Probabilidad de mutación para cada gen (nodo) en un individuo.
     :type tasa_mutacion: float
-    :param factor_basura: Factor que multiplica la población de cada nodo para estimar su peso en basura.
+    :param factor_basura: Factor que multiplica la población de cada nodo para estimar el peso en basura.
     :type factor_basura: float
-    :param camiones: Lista de instancias Camion disponibles para los grupos.
-    :type camiones: List[Camion]
-    :param reconectar_grupos: Indica si se deben reconectar aristas entre nodos del mismo grupo tras el agrupamiento.
+    :param camiones: Lista de objetos Camion disponibles para atender los grupos resultantes.
+    :type camiones: Optional[List[Camion]]
+    :param reconectar_grupos: Indica si se deben reconectar aristas entre los nodos que pertenezcan
+                              al mismo grupo, una vez finalizado el agrupamiento.
     :type reconectar_grupos: bool
-    :param semilla_random: Semilla para reproducir resultados aleatorios.
+    :param semilla_random: Semilla para reproducibilidad de resultados aleatorios.
     :type semilla_random: Optional[int]
-    :param tamano_elite: Tamaño de la élite utilizada en la fase de selección elitista.
-    :type tamano_elite: float
     """
 
     def __init__(
         self,
         ruta_shp: str,
-        tamano_poblacion: int = 250,
+        tamano_poblacion: int = 750,
         num_generaciones: int = 500,
         tasa_mutacion: float = 0.01,
         factor_basura: float = 1.071,
-        camiones: List[Camion] = None,
+        camiones: Optional[List[Camion]] = None,
         reconectar_grupos: bool = True,
-        semilla_random: Optional[int] = None,
-        tamano_elite: float = 0.3
+        semilla_random: Optional[int] = None
     ) -> None:
-        # Si se proporciona la semilla para números aleatorios, se configura.
+        """
+        Configura la instancia cargando la información geográfica desde el Shapefile especificado.
+        Posteriormente, genera la gráfica de nodos y, si existen camiones, ajusta los parámetros de
+        límite de peso de acuerdo con sus capacidades.
+        """
+        # Si se proporciona una semilla aleatoria, se fija para garantizar reproducibilidad.
         if semilla_random is not None:
             random.seed(semilla_random)
 
+        # Almacena la ruta del archivo Shapefile.
         self.ruta_shapefile: str = ruta_shp
-        self.tamano_poblacion: int = tamano_poblacion
-        self.num_generaciones: int = num_generaciones
-        self.tasa_mutacion: float = tasa_mutacion
-        self.factor_basura: float = factor_basura
-        self.camiones: Optional[List[Camion]] = camiones
-        self.reconectar_grupos: bool = reconectar_grupos
-        self.tamano_elite: int = int(tamano_poblacion * tamano_elite)
 
-        # Se intenta leer el shapefile para cargar los datos en un GeoDataFrame.
+        # Define el tamaño de la población inicial para el algoritmo genético.
+        self.tamano_poblacion: int = tamano_poblacion
+
+        # Número total de generaciones que se ejecutarán.
+        self.num_generaciones: int = num_generaciones
+
+        # Probabilidad de que ocurra mutación en cada gen (nodo).
+        self.tasa_mutacion: float = tasa_mutacion
+
+        # Factor para convertir la población de cada nodo en peso de basura.
+        self.factor_basura: float = factor_basura
+
+        # Lista de camiones disponibles para la asignación.
+        self.camiones: Optional[List[Camion]] = camiones
+
+        # Indica si se reconectarán los nodos dentro de cada grupo tras el agrupamiento.
+        self.reconectar_grupos: bool = reconectar_grupos
+
+        # Tamaño de la élite utilizada en la fase de selección elitista del algoritmo genético.
+        self.tamano_elite: int = tamano_poblacion // 10
+
+        # Se intenta leer el archivo Shapefile para generar el GeoDataFrame.
         try:
             self.gdf: gpd.GeoDataFrame = gpd.read_file(ruta_shp)
         except Exception as error:
             raise ErrorShapefile(f"Error al leer el shapefile: {error}")
 
-        # Se construye la red principal de nodos y aristas.
+        # Se construye la gráfica principal.
         self.gráfica: nx.Graph = nx.Graph()
         self._crear_gráfica()
-
+    
     # -------------------------------------------------------------------------
     # Métodos privados
     # -------------------------------------------------------------------------
 
     def _obtener_limite_peso(self) -> float:
         """
-        Devuelve el límite de peso que se utiliza para agrupar. Si existen camiones disponibles, utiliza
-        el valor máximo de sus capacidades efectivas (capacidad * factor_reserva).
-
+        Determina el límite de peso a utilizar para agrupar. Si existen camiones disponibles, se toma el
+        máximo de sus capacidades efectivas (capacidad * factor_reserva).
+        
         :return: Límite de peso para el agrupamiento.
         :rtype: float
-        :raises ValueError: Si no se cuenta con un límite de peso y no se han proporcionado camiones.
+        :raises ValueError: Si no se especifica un límite de peso y no se proporcionan camiones.
         """
-        # Verifica si hay camiones disponibles y calcula el límite de peso a partir de ellos.
         if self.camiones and len(self.camiones) > 0:
             return max(camion.capacidad * camion.factor_reserva for camion in self.camiones)
         else:
-            # Si no hay camiones ni otro límite de peso especificado, se lanza excepción.
+            # Si no hay camiones y no hay límite de peso, se lanza excepción.
             raise ValueError("Debe especificarse un límite de peso o proporcionar camiones.")
 
     def _crear_gráfica(self) -> None:
         """
-        Construye la red de nodos y aristas a partir de la información en el GeoDataFrame.
-        Cada fila del GeoDataFrame se convierte en un nodo con atributos, y se establecen aristas
-        entre nodos cuyas geometrías son adyacentes.
+        Construye la gráfica a partir de la información contenida en el GeoDataFrame.
+        Cada fila del GeoDataFrame se convierte en un nodo con atributos, y se añaden aristas
+        entre nodos cuyas geometrías se tocan (adyacencia espacial).
         
-        :raises ErrorShapefile: Si la columna 'pob' no se localiza en el shapefile.
-        :raises ErrorRedVial: Si ocurre un error durante la construcción de la red de nodos y aristas.
+        :raises ErrorShapefile: Si la columna 'pob' no se encuentra en el shapefile.
+        :raises ErrorRedVial: Si ocurre algún error durante la construcción de la gráfica.
         """
         try:
-            # Recorre cada fila para crear un nodo en la red.
             for indice, fila in self.gdf.iterrows():
                 if 'pob' not in fila:
                     raise ErrorShapefile(
                         f"No se encontró la columna 'pob' en el shapefile para el nodo {indice}."
                     )
-                # Calcula el peso del nodo con base en la población y el factor de basura.
+                # Se calcula el peso de los nodos tomando en cuenta a la población y a la generación per cápita de basura por persona.
                 peso: float = fila['pob'] * self.factor_basura
-
-                # Agrega el nodo con atributos relevantes (geometría, posición, peso).
                 self.gráfica.add_node(
                     indice,
                     geometria=fila.geometry,
@@ -192,42 +216,38 @@ class AgrupamientoAGEB:
                     peso=peso
                 )
 
-            # Establece las aristas verificando la adyacencia (touches) entre geometrías.
             for i, fila1 in self.gdf.iterrows():
                 for j, fila2 in self.gdf.iterrows():
                     if i < j and fila1.geometry.touches(fila2.geometry):
                         self.gráfica.add_edge(i, j)
 
         except Exception as error:
-            raise ErrorRedVial(f"Error creando la red de nodos y aristas: {error}")
+            raise ErrorRedVial(f"Error creando la gráfica: {error}")
 
     def _crear_poblacion_inicial(self, grafica: nx.Graph, limite: float) -> List[List[int]]:
         """
-        Crea la población inicial para el algoritmo genético sobre la gráfica especificada. 
-        Cada individuo es una lista en la que cada posición indica el grupo asignado al nodo 
-        correspondiente. Esta recorre los nodos y los agrupa sin excederse del límite de peso, 
+        Crea la población inicial para el algoritmo genético sobre la gráfica especificada.
+        Cada individuo es una lista en la que cada posición indica el grupo asignado al nodo correspondiente.
+        
+        El método recorre los nodos y los agrupa de manera voraz mientras no se exceda el límite de peso,
         generando múltiples soluciones aleatorias que conformarán la población inicial.
         
-        :param grafica: Estructura de nodos y aristas sobre la cual se generarán los individuos.
+        :param grafica: Gráfica sobre la cual se generarán los individuos.
         :type grafica: nx.Graph
         :param limite: Límite de peso que no deben exceder los grupos.
         :type limite: float
-        :return: Lista de individuos representados como listas de grupos asignados a cada nodo.
+        :return: Lista de individuos representados como listas de asignaciones de grupos.
         :rtype: List[List[int]]
         """
         poblacion: List[List[int]] = []
-        # Determina la cantidad total de nodos para poder indexar correctamente a cada uno.
         num_nodos: int = grafica.number_of_nodes()
         nodos_ordenados = list(grafica.nodes())
 
-        # Se generan tantas soluciones (individuos) como se definió en tamano_poblacion.
         for _ in range(self.tamano_poblacion):
-            # Cada individuo inicia con -1, indicando que no se ha asignado grupo.
             individuo: List[int] = [-1] * num_nodos
             nodos_visitados: set = set()
             grupo_actual: int = 0
 
-            # Recorre los nodos y aplica una estrategia voraz para agruparlos sin exceder el límite.
             for nodo in nodos_ordenados:
                 if nodo not in nodos_visitados:
                     peso_acumulado: float = grafica.nodes[nodo]['peso']
@@ -241,7 +261,6 @@ class AgrupamientoAGEB:
                             individuo[pos_nodo] = grupo_actual
                             nodos_visitados.add(nodo_actual)
 
-                            # Intenta agregar vecinos si no se excede el límite de peso.
                             for vecino in grafica.neighbors(nodo_actual):
                                 if vecino not in nodos_visitados:
                                     peso_vecino = grafica.nodes[vecino]['peso']
@@ -262,37 +281,34 @@ class AgrupamientoAGEB:
         limite: float
     ) -> float:
         """
-        Calcula el valor de fitness de un individuo sobre la gráfica indicada, basándose en 
-        los siguientes criterios:
+        Calcula el valor de fitness de un individuo sobre la gráfica indicada, basándose en criterios:
         
-        1) Penalización para grupos que exceden el límite de peso.
-        2) Recompensa por aristas dentro de grupos y penalización por aristas que unen grupos distintos.
-        3) Penalización mayor para grupos cuyo peso supera la capacidad de todos los camiones.
-
-        :param grafica: Estructura de nodos y aristas a la cual corresponde el individuo.
+        1) Penaliza grupos cuyo peso excede el límite.
+        2) Penaliza las aristas que conectan nodos de grupos distintos y premia las aristas internas.
+        3) Si hay camiones definidos, penaliza fuertemente los grupos cuyo peso supere la capacidad
+           de todos los camiones disponibles.
+        
+        :param grafica: Gráfica a la cual corresponde el individuo (puede ser la principal o una subgráfica).
         :type grafica: nx.Graph
-        :param individuo: Lista que asigna un grupo a cada nodo según su posición en la lista.
+        :param individuo: Lista que asigna un grupo a cada nodo (por su posición en la lista).
         :type individuo: List[int]
-        :param limite: Límite de peso permitido en los grupos.
+        :param limite: Límite de peso para los grupos del individuo.
         :type limite: float
-        :return: Valor de aptitud (fitness) calculado para el individuo.
+        :return: Puntaje de aptitud obtenido para el individuo.
         :rtype: float
         """
         puntaje: float = 0.0
         pesos_por_grupo: Dict[int, float] = {}
         nodos_ordenados = list(grafica.nodes())
 
-        # Calcula el peso total por cada grupo.
         for i, nodo in enumerate(nodos_ordenados):
             grupo: int = individuo[i]
             pesos_por_grupo[grupo] = pesos_por_grupo.get(grupo, 0.0) + grafica.nodes[nodo]['peso']
 
-        # Aplica penalizaciones si se excede el límite en algún grupo.
         for peso_grupo in pesos_por_grupo.values():
             if peso_grupo > limite:
                 puntaje -= (peso_grupo - limite)
 
-        # Recibe una recompensa por cada arista interna y penalización por aristas que conectan diferentes grupos.
         for u, v in grafica.edges():
             idx_u = nodos_ordenados.index(u)
             idx_v = nodos_ordenados.index(v)
@@ -301,7 +317,6 @@ class AgrupamientoAGEB:
             else:
                 puntaje -= 1.0
 
-        # Considera la capacidad de los camiones disponibles, penalizando fuertemente los grupos demasiado pesados.
         if self.camiones:
             capacidades_efectivas: List[float] = []
             for camion in self.camiones:
@@ -323,26 +338,24 @@ class AgrupamientoAGEB:
         num_seleccionar: int
     ) -> List[List[int]]:
         """
-        Realiza un proceso de selección elitista para elegir los individuos que pasarán a la siguiente 
-        generación. Se ordena la población de mayor a menor según su fitness. Luego:
+        Realiza un proceso de selección elitista para elegir los individuos que pasarán a la siguiente generación.
+        Se ordena la población de mayor a menor según su fitness. Luego:
         
-        - Se conservan los mejores individuos.
+        - Se conservan los mejores individuos (élite).
         - Se completa la selección tomando individuos de la mitad superior.
-
+        
         :param poblacion: Conjunto de individuos de la generación actual.
         :type poblacion: List[List[int]]
-        :param puntajes: Lista con los valores de aptitud (fitness) correspondientes a cada individuo.
+        :param puntajes: Lista con los valores de fitness respectivos.
         :type puntajes: List[float]
-        :param num_seleccionar: Número total de individuos que se conservarán.
+        :param num_seleccionar: Número total de individuos a conservar.
         :type num_seleccionar: int
-        :return: Lista de individuos que formarán parte de la siguiente generación.
+        :return: Lista de individuos seleccionados para la siguiente generación.
         :rtype: List[List[int]]
         """
-        # Combina la población con los puntajes de aptitud para poder ordenarla.
         combinados = list(zip(poblacion, puntajes))
         combinados.sort(key=lambda par: par[1], reverse=True)
 
-        # Se separa la élite y luego se toman más individuos de la mitad superior.
         elites = combinados[:self.tamano_elite]
         mitad_superior = combinados[:len(combinados)//2]
         faltan_por_seleccionar = num_seleccionar - self.tamano_elite
@@ -353,39 +366,35 @@ class AgrupamientoAGEB:
 
     def _cruzar(self, padre1: List[int], padre2: List[int]) -> List[int]:
         """
-        Realiza un cruce simple entre dos individuos, eligiendo un punto de cruce 
-        aleatorio y combinando la parte inicial del primer padre con la parte final 
-        del segundo.
-
+        Realiza un cruce simple entre dos individuos, eligiendo un punto de cruce aleatorio y combinando
+        la parte inicial del primer padre con la parte final del segundo.
+        
         :param padre1: Primer individuo.
         :type padre1: List[int]
         :param padre2: Segundo individuo.
         :type padre2: List[int]
-        :return: Lista de enteros que representa el hijo resultante del cruce.
+        :return: Hijo resultante del cruce.
         :rtype: List[int]
         """
-        # Si los padres son muy pequeños, devuelve el primero sin cambio.
         if len(padre1) <= 2:
             return padre1
         
-        # Elige un punto de cruce entre los extremos.
         punto_cruce = random.randint(1, len(padre1) - 2)
         return padre1[:punto_cruce] + padre2[punto_cruce:]
 
     def _mutar(self, individuo: List[int]) -> List[int]:
         """
-        Aplica la operación de mutación con una probabilidad igual a la tasa de mutación. 
+        Aplica la operación de mutación con una probabilidad igual a la tasa de mutación.
         Para cada gen, se puede reasignar el grupo a un nuevo valor (max_grupo + 1).
-
-        :param individuo: Individuo sujeto a posible mutación.
+        
+        :param individuo: Individuo a mutar.
         :type individuo: List[int]
-        :return: Individuo tras la operación de mutación.
+        :return: Individuo luego de aplicar la mutación.
         :rtype: List[int]
         """
         max_grupo = max(individuo)
         for i in range(len(individuo)):
             if random.random() < self.tasa_mutacion:
-                # Aumenta el índice de grupo para promover la diversidad.
                 individuo[i] = max_grupo + 1
         return individuo
 
@@ -396,33 +405,28 @@ class AgrupamientoAGEB:
         limite: float
     ) -> Tuple[List[List[int]], List[int], float]:
         """
-        Ejecuta una generación de evolución genética (cálculo de fitness, selección, cruce y 
-        mutación) y devuelve la nueva población, el mejor individuo y su fitness.
-
-        :param grafica: Estructura de nodos y aristas sobre la cual se evalúan los individuos.
+        Ejecuta una generación de evolución genética (cálculo de fitness, selección, cruce y mutación) y
+        devuelve la nueva población, el mejor individuo y su fitness.
+        
+        :param grafica: Gráfica sobre la cual se evalúan los individuos.
         :type grafica: nx.Graph
-        :param poblacion: Población de individuos de la generación actual.
+        :param poblacion: Población de individuos en la generación actual.
         :type poblacion: List[List[int]]
-        :param limite: Límite de peso que no deben exceder los grupos.
+        :param limite: Límite de peso de los grupos.
         :type limite: float
-        :return: Tupla con la nueva población, el mejor individuo y la aptitud de ese mejor individuo.
+        :return: Tupla con (nueva_población, mejor_individuo, mejor_fitness).
         :rtype: Tuple[List[List[int]], List[int], float]
         """
-        # Calcula los puntajes (fitness) para todos los individuos.
         puntajes = [self._calcular_fitness(grafica, ind, limite) for ind in poblacion]
-
-        # Selecciona un subconjunto de individuos para generar la siguiente población.
         seleccionados = self._seleccion_elitista(poblacion, puntajes, num_seleccionar=len(poblacion) // 2)
 
         nueva_poblacion: List[List[int]] = []
-        # Genera la nueva población hasta alcanzar el tamaño original.
         while len(nueva_poblacion) < len(poblacion):
             padre1, padre2 = random.sample(seleccionados, 2)
             hijo = self._cruzar(padre1, padre2)
             hijo_mutado = self._mutar(hijo)
             nueva_poblacion.append(hijo_mutado)
 
-        # Identifica al mejor individuo de la generación actual.
         indice_mejor = puntajes.index(max(puntajes))
         mejor_individuo = poblacion[indice_mejor]
         mejor_fitness = puntajes[indice_mejor]
@@ -436,36 +440,32 @@ class AgrupamientoAGEB:
         reconectar: bool
     ) -> Tuple[List[int], Dict[int, List[int]], Dict[int, float]]:
         """
-        Ejecuta el algoritmo genético elitista sobre la gráfica indicada. Devuelve la asignación 
-        de grupos (mejor individuo), así como diccionarios de grupos y pesos.
-
-        :param grafica: Estructura de nodos y aristas que se agrupa.
+        Ejecuta el algoritmo genético elitista sobre la gráfica indicada (puede ser la principal o una subgráfica).
+        Devuelve la asignación de grupos (mejor individuo), así como diccionarios de grupos y pesos.
+        
+        :param grafica: Gráfica de la cual se generará el agrupamiento.
         :type grafica: nx.Graph
-        :param limite: Límite de peso por grupo.
+        :param limite: Límite de peso para los grupos.
         :type limite: float
-        :param reconectar: Indica si deben reconectarse aristas dentro de cada grupo al finalizar.
+        :param reconectar: Indica si se deben reconectar aristas dentro de cada grupo al finalizar.
         :type reconectar: bool
-        :return: Tupla con el mejor individuo, un diccionario de grupos (nodos) y un diccionario de pesos por grupo.
+        :return: Tupla (mejor_individuo, grupos, pesos_grupos).
         :rtype: Tuple[List[int], Dict[int, List[int]], Dict[int, float]]
-        :raises RuntimeError: Si no se identifica un individuo válido al concluir las generaciones.
+        :raises RuntimeError: Si no se logra encontrar un individuo válido tras las generaciones.
         """
-        # Genera la población inicial.
         poblacion = self._crear_poblacion_inicial(grafica, limite)
         mejor_fitness = float('-inf')
         mejor_individuo: Optional[List[int]] = None
 
-        # Itera sobre el número de generaciones definidas.
         for _ in tqdm(range(self.num_generaciones), desc="Generaciones", ncols=80):
             poblacion, ind, fitness = self._evolucion_poblacion(grafica, poblacion, limite)
             if fitness > mejor_fitness:
                 mejor_fitness = fitness
                 mejor_individuo = ind
 
-        # Verifica que se haya encontrado un individuo válido.
         if mejor_individuo is None:
             raise RuntimeError("No se encontró un individuo válido.")
 
-        # Se construye la asignación final de grupos y sus pesos.
         grupos: Dict[int, List[int]] = {}
         pesos_grupos: Dict[int, float] = {}
         nodos_ordenados = list(grafica.nodes())
@@ -478,7 +478,6 @@ class AgrupamientoAGEB:
             grupos[id_grupo].append(nodo)
             pesos_grupos[id_grupo] += grafica.nodes[nodo]['peso']
 
-        # Elimina las aristas que conectan grupos distintos.
         aristas_eliminar = []
         for u, v in grafica.edges():
             idx_u = nodos_ordenados.index(u)
@@ -487,7 +486,6 @@ class AgrupamientoAGEB:
                 aristas_eliminar.append((u, v))
         grafica.remove_edges_from(aristas_eliminar)
 
-        # Si se requiere, se reconectan los nodos dentro de cada grupo para formar subgráficas completas.
         if reconectar:
             for grupo, lista_nodos in grupos.items():
                 for i in range(len(lista_nodos)):
@@ -502,18 +500,17 @@ class AgrupamientoAGEB:
     # -------------------------------------------------------------------------
     # Métodos públicos
     # -------------------------------------------------------------------------
-    
+
     def ejecutar_agrupamiento(self) -> Tuple[List[int], Dict[int, List[int]], Dict[int, float]]:
         """
-        Ejecuta el algoritmo genético elitista sobre la gráfica para encontrar la mejor partición 
-        en grupos, respetando el límite de peso establecido.
-
-        :return: Tupla con el mejor individuo, un diccionario de grupos (nodos) y un diccionario de pesos por grupo.
+        Ejecuta el algoritmo genético elitista sobre la gráfica principal para encontrar
+        la mejor partición en grupos, respetando el límite de peso establecido.
+        
+        :return: Tupla con (mejor_individuo, grupos, pesos_grupos).
         :rtype: Tuple[List[int], Dict[int, List[int]], Dict[int, float]]
         """
-        # Calcula o verifica el límite de peso con base en las capacidades de los camiones.
+        # Se obtiene el límite a partir de los camiones (o se genera excepción si no existen).
         limite_peso = self._obtener_limite_peso()
-        # Ejecuta el proceso de agrupamiento genético completo.
         return self._ejecutar_agrupamiento_genetico(
             grafica=self.gráfica,
             limite=limite_peso,
@@ -524,45 +521,39 @@ class AgrupamientoAGEB:
         self,
         grupos: Dict[int, List[int]],
         pesos_grupos: Dict[int, float]
-    ) -> Tuple[Dict[int, Optional['Camion']], List['Camion']]:
+    ) -> Tuple[Dict[int, Optional[Camion]], List[Camion]]:
         """
-        Asigna camiones a los grupos generados según la capacidad efectiva de cada camión 
-        (capacidad * factor_reserva). Además:
-
+        Asigna camiones a los grupos generados según la capacidad efectiva de cada camión (capacidad * factor_reserva).
+        
         - Identifica "grupos prioritarios": aquellos de un solo nodo con peso que excede la capacidad mínima.
         - Asigna dichos grupos prioritarios con camiones de mayor capacidad.
         - Para el resto, se usa el camión más pequeño que sea suficiente.
-
-        :param grupos: Diccionario que vincula el identificador de grupo con la lista de nodos contenidos.
+        
+        :param grupos: Diccionario que mapea el id de grupo a la lista de nodos que contiene.
         :type grupos: Dict[int, List[int]]
-        :param pesos_grupos: Diccionario que vincula el identificador de grupo con su peso total.
+        :param pesos_grupos: Diccionario que mapea el id de grupo a su peso total.
         :type pesos_grupos: Dict[int, float]
         :return: Tupla (asignaciones, camiones_restantes).
-            - asignaciones: Diccionario que asigna cada grupo a un camión (o None si no pudo asignarse).
-            - camiones_restantes: Lista de camiones no utilizados.
+                 - asignaciones: Diccionario que mapea cada grupo al camión asignado (o None).
+                 - camiones_restantes: Lista de camiones no utilizados.
         :rtype: Tuple[Dict[int, Optional[Camion]], List[Camion]]
         """
-        # Si no hay camiones, cada grupo queda sin asignación.
         if not self.camiones:
             return {g: None for g in grupos}, []
 
-        # Crea la lista completa de camiones disponibles (según la cantidad de cada tipo).
         camiones_disponibles: List[Camion] = []
         for camion in self.camiones:
             for _ in range(camion.cantidad_camiones):
                 camiones_disponibles.append(camion)
 
-        # Si la lista resultante está vacía, todos los grupos quedan sin asignación.
         if not camiones_disponibles:
             return {g: None for g in grupos}, []
 
-        # Encuentra la capacidad mínima de todos los camiones disponibles.
         min_cap = min(c.capacidad * c.factor_reserva for c in camiones_disponibles)
 
         grupos_prioritarios: Dict[int, List[int]] = {}
         grupos_restantes: Dict[int, List[int]] = {}
 
-        # Determina qué grupos son prioritarios (un solo nodo con peso mayor a la capacidad mínima).
         for g, nodos in grupos.items():
             if len(nodos) == 1 and pesos_grupos[g] > min_cap:
                 grupos_prioritarios[g] = nodos
@@ -571,7 +562,6 @@ class AgrupamientoAGEB:
 
         asignaciones: Dict[int, Optional[Camion]] = {}
 
-        # Ordena camiones en orden descendente para asignar primero a los grupos prioritarios.
         camiones_disponibles.sort(key=lambda c: c.capacidad * c.factor_reserva, reverse=True)
         grupos_prioritarios_ordenados = sorted(
             grupos_prioritarios.items(),
@@ -579,7 +569,6 @@ class AgrupamientoAGEB:
             reverse=True
         )
 
-        # Asigna camiones de mayor capacidad a grupos prioritarios.
         for g, _ in grupos_prioritarios_ordenados:
             peso_g = pesos_grupos[g]
             asignado = False
@@ -592,7 +581,6 @@ class AgrupamientoAGEB:
             if not asignado:
                 asignaciones[g] = None
 
-        # Ordena en orden ascendente para asignar camiones más pequeños a los grupos restantes.
         camiones_disponibles.sort(key=lambda c: c.capacidad * c.factor_reserva)
         grupos_restantes_ordenados = sorted(
             grupos_restantes.items(),
@@ -600,7 +588,6 @@ class AgrupamientoAGEB:
             reverse=True
         )
 
-        # Asigna camiones adecuados a los grupos restantes.
         for g, _ in grupos_restantes_ordenados:
             peso_g = pesos_grupos[g]
             asignado = False
@@ -621,20 +608,18 @@ class AgrupamientoAGEB:
         limite_peso_sub: float
     ) -> Tuple[List[int], Dict[int, List[int]], Dict[int, float]]:
         """
-        Ejecuta el algoritmo genético elitista sobre la subgráfica inducida por los nodos indicados, 
-        con un límite de peso particular. Se utiliza comúnmente para subdividir grupos que exceden 
+        Ejecuta el algoritmo genético elitista sobre la subgráfica inducida por los nodos indicados,
+        con un límite de peso particular. Se utiliza comúnmente para subdividir grupos que exceden
         la capacidad de los camiones.
-
-        :param nodos: Lista de nodos que integran la subgráfica.
+        
+        :param nodos: Lista de nodos que conforman la subgráfica a agrupar.
         :type nodos: List[int]
         :param limite_peso_sub: Límite de peso para los grupos en la subgráfica.
         :type limite_peso_sub: float
-        :return: Tupla con el mejor individuo, un diccionario de subgrupos (nodos) y un diccionario de pesos por subgrupo.
+        :return: Tupla (mejor_individuo, grupos_sub, pesos_sub) con la mejor solución encontrada.
         :rtype: Tuple[List[int], Dict[int, List[int]], Dict[int, float]]
         """
-        # Crea una copia de la red con solo los nodos y aristas del subgrupo.
         subgrafica = self.gráfica.subgraph(nodos).copy()
-        # Ejecuta el agrupamiento genético sobre la subgrafica y regresa los resultados.
         mejor_individuo, grupos_sub, pesos_sub = self._ejecutar_agrupamiento_genetico(
             grafica=subgrafica,
             limite=limite_peso_sub,
@@ -651,28 +636,28 @@ class AgrupamientoAGEB:
     ) -> Tuple[Dict[int, List[int]], Dict[int, float], Dict[int, Optional[Camion]]]:
         """
         Refina la asignación de camiones tras el agrupamiento inicial de la siguiente forma:
-
-        - Subdivide los grupos que no cuentan con camión asignado (porque su peso excede la capacidad de todos los camiones disponibles) mediante un nuevo agrupamiento (subgráfica).
-        - Vuelve a asignar camiones a la estructura resultante.
-        - Intenta reagrupar los subgrupos que provengan del mismo grupo original, si existe un camión capaz de cubrirlos en conjunto.
-
-        :param grupos: Diccionario original que asigna cada grupo a su lista de nodos.
+        
+        1) Subdivide los grupos que no cuentan con camión asignado (porque su peso excede la capacidad
+           de todos los camiones disponibles) mediante un nuevo agrupamiento (subgráfica).
+        2) Vuelve a asignar camiones a la estructura resultante.
+        3) Intenta reagrupar los subgrupos que provengan del mismo grupo original, si existe un camión
+           capaz de cubrirlos en conjunto.
+        
+        :param grupos: Diccionario original (grupo -> lista de nodos).
         :type grupos: Dict[int, List[int]]
-        :param pesos_grupos: Diccionario que asigna el peso total de cada grupo.
+        :param pesos_grupos: Diccionario (grupo -> peso total del grupo).
         :type pesos_grupos: Dict[int, float]
-        :param asignaciones: Diccionario que vincula cada grupo a un camión o None.
+        :param asignaciones: Diccionario (grupo -> camión asignado o None) tras la asignación inicial.
         :type asignaciones: Dict[int, Optional[Camion]]
         :param camiones_restantes: Lista de camiones que no se utilizaron en la asignación previa.
         :type camiones_restantes: List[Camion]
-        :return: Tupla con la nueva asignación de grupos, los pesos actualizados y la asignación de camiones.
+        :return: Tupla (nuevos_grupos, nuevos_pesos, nuevas_asignaciones).
         :rtype: Tuple[Dict[int, List[int]], Dict[int, float], Dict[int, Optional[Camion]]]
         """
-        # Verifica si existen camiones restantes; si no, no es posible subdividir ni reagrupar.
         if not camiones_restantes:
             print("No hay camiones restantes para intentar dividir ni reagrupar grupos.")
             return grupos, pesos_grupos, asignaciones
 
-        # Determina la máxima capacidad efectiva entre los camiones que quedan.
         capacidad_maxima = max(c.capacidad * c.factor_reserva for c in camiones_restantes)
 
         nuevos_grupos: Dict[int, List[int]] = {}
@@ -681,7 +666,6 @@ class AgrupamientoAGEB:
         grupo_padre: Dict[int, int] = {}
         id_nuevo: int = 0
 
-        # Subdivide los grupos cuyo peso excede la capacidad máxima disponible.
         for id_grupo, nodos_grupo in grupos.items():
             peso_g = pesos_grupos[id_grupo]
             camion_asignado = asignaciones[id_grupo]
@@ -701,10 +685,8 @@ class AgrupamientoAGEB:
                     grupo_padre[id_nuevo] = id_grupo
                     id_nuevo += 1
 
-        # Reasigna camiones a la nueva estructura de grupos.
         nuevas_asignaciones, camiones_sobrantes = self.asignar_camiones(nuevos_grupos, nuevos_pesos)
 
-        # Verifica si es posible reagrupar subgrupos surgidos de la misma división, usando un camión de mayor capacidad.
         padre_a_subgrupos: Dict[int, List[int]] = {}
         for sub_id, p_id in grupo_padre.items():
             padre_a_subgrupos.setdefault(p_id, []).append(sub_id)
@@ -720,7 +702,6 @@ class AgrupamientoAGEB:
             if peso_total <= max_cap_sobrante:
                 ids_a_unir.append((p_id, lista_sub_ids, peso_total))
 
-        # Reagrupa subgrupos compatibles con algún camión disponible.
         for (p_id, lista_sub_ids, peso_total) in ids_a_unir:
             todos_nodos = []
             for sid in lista_sub_ids:
@@ -730,7 +711,6 @@ class AgrupamientoAGEB:
             nuevos_grupos[nuevo_id] = todos_nodos
             nuevos_pesos[nuevo_id] = peso_total
 
-            # Elimina los subgrupos previos tras reagruparlos en uno solo.
             for sid in lista_sub_ids:
                 if sid != nuevo_id:
                     if sid in nuevos_grupos:
@@ -740,7 +720,6 @@ class AgrupamientoAGEB:
                     if sid in nuevas_asignaciones:
                         del nuevas_asignaciones[sid]
 
-            # Busca un camión que pueda cargar la nueva agrupación.
             camion_elegido = None
             for i, c in enumerate(camiones_sobrantes):
                 if c.capacidad * c.factor_reserva >= peso_total:
@@ -754,26 +733,24 @@ class AgrupamientoAGEB:
     def graficar_con_camiones(
         self,
         grupos: Dict[int, List[int]],
-        asignaciones: Dict[int, Optional[Camion]]
+        asignaciones: Dict[int, Optional[Camion]],
+        output_path: Optional[str] = None
     ) -> None:
         """
-        Genera una visualización que muestra los nodos y sus conexiones, coloreando cada grupo de 
-        acuerdo con el camión asignado. Los grupos sin camión se representan en rojo.
-
-        :param grupos: Diccionario que vincula cada grupo con los nodos que lo componen.
+        Genera una visualización que muestra los nodos y sus conexiones, coloreando cada grupo
+        de acuerdo con el camión asignado. Los grupos sin camión se representan en rojo. 
+        Si `output_path` está definido, se guarda la figura en esa ruta en lugar de mostrarla.
+        
+        :param grupos: Diccionario (grupo -> lista de nodos).
         :type grupos: Dict[int, List[int]]
-        :param asignaciones: Diccionario que vincula cada grupo con un objeto Camion o con None.
+        :param asignaciones: Diccionario (grupo -> camión o None).
         :type asignaciones: Dict[int, Optional[Camion]]
-        :return: No devuelve un valor.
-        :rtype: None
         """
-        # Calcula posiciones (x, y) a partir del centroide de cada geometría.
         posiciones: Dict[Any, Tuple[float, float]] = {
             indice: (fila.geometry.centroid.x, fila.geometry.centroid.y)
             for indice, fila in self.gdf.iterrows()
         }
 
-        # Define una lista de colores base.
         colores_base: List[str] = [
             'blue', 'green', 'orange', 'purple',
             'brown', 'pink', 'gray', 'olive',
@@ -782,7 +759,6 @@ class AgrupamientoAGEB:
         colores_por_camion: Dict[str, str] = {}
         nombres_asignados: List[str] = []
 
-        # Asocia cada camión con un color distinto, en caso de existir.
         if self.camiones:
             for indice, camion in enumerate(self.camiones):
                 color_camion = colores_base[indice % len(colores_base)]
@@ -790,7 +766,6 @@ class AgrupamientoAGEB:
                     colores_por_camion[camion.nombre] = color_camion
                     nombres_asignados.append(camion.nombre)
 
-        # Determina el color de cada nodo según el camión asignado al grupo.
         mapa_colores: Dict[int, str] = {}
         for id_grupo, lista_nodos in grupos.items():
             camion = asignaciones.get(id_grupo, None)
@@ -801,7 +776,6 @@ class AgrupamientoAGEB:
             for nodo in lista_nodos:
                 mapa_colores[nodo] = color_grupo
 
-        # Configura el tamaño de la figura y dibuja la red con NetworkX.
         plt.figure(figsize=(16, 10))
         plt.title("Agrupamiento de AGEB con asignación de camiones")
         nx.draw(
@@ -814,7 +788,6 @@ class AgrupamientoAGEB:
             edge_color="gray"
         )
 
-        # Construye la leyenda para la asignación de colores.
         leyenda: List[Patch] = []
         camiones_agregados: set = set()
         for id_grupo, camion in asignaciones.items():
@@ -825,25 +798,26 @@ class AgrupamientoAGEB:
                 )
                 camiones_agregados.add(camion.nombre)
 
-        # Si hay grupos sin asignación, se agrega un ítem rojo a la leyenda.
         if any(camion is None for camion in asignaciones.values()):
             leyenda.append(Patch(facecolor='red', edgecolor='black', label='Sin asignación'))
 
-        # Muestra la leyenda en la figura, si corresponde.
         if leyenda:
             plt.legend(handles=leyenda, loc='best', title="Camiones")
-        plt.show()
+
+        if output_path:
+            plt.savefig(output_path, bbox_inches='tight')
+            plt.close()
+        else:
+            plt.show()
 
     def guardar_resultados(self, mejor_individuo: List[int], archivo: str) -> None:
         """
-        Guarda la asignación de grupos del mejor individuo (solución final) en un archivo JSON.
-
-        :param mejor_individuo: Lista que indica el grupo asignado a cada nodo.
+        Guarda la asignación de grupos del mejor individuo (solución resultante) en un archivo JSON.
+        
+        :param mejor_individuo: Lista que asigna a cada nodo el grupo correspondiente.
         :type mejor_individuo: List[int]
-        :param archivo: Ruta o nombre del archivo para almacenar los resultados.
+        :param archivo: Ruta o nombre del archivo en el que se almacenarán los resultados.
         :type archivo: str
-        :return: No devuelve un valor.
-        :rtype: None
         """
         try:
             with open(archivo, 'w', encoding='utf-8') as f:
@@ -854,178 +828,17 @@ class AgrupamientoAGEB:
 
 
 # ============================================================================
-# Clase ExportarSectoresAGEB
-# ============================================================================
-class ExportarSectoresAGEB:
-    """
-    Permite leer un archivo shapefile con geometrías de AGEB y un archivo JSON con la asignación
-    de cada nodo a un grupo determinado. Luego, exporta cada grupo en un shapefile independiente.
-
-    :param ruta_agrupamiento: Ruta al archivo JSON que define la agrupación.
-    :type ruta_agrupamiento: str
-    :param ruta_shapefile: Ruta al archivo Shapefile con las geometrías de AGEB.
-    :type ruta_shapefile: str
-    :param directorio_salida: Directorio donde se guardarán los shapefiles resultantes.
-    :type directorio_salida: str
-    """
-
-    def __init__(
-        self,
-        ruta_agrupamiento: str,
-        ruta_shapefile: str,
-        directorio_salida: str
-    ) -> None:
-        """
-        Inicializa la clase con la información necesaria para procesar y exportar
-        cada grupo en un shapefile distinto.
-        """
-        self.ruta_agrupamiento = ruta_agrupamiento
-        self.ruta_shapefile = ruta_shapefile
-        self.directorio_salida = directorio_salida
-
-        # Crea el directorio de salida si no existe
-        os.makedirs(self.directorio_salida, exist_ok=True)
-
-    # -------------------------------------------------------------------------
-    # Métodos privados
-    # -------------------------------------------------------------------------
-
-    def _leer_agrupamiento(self) -> Dict[int, int]:
-        """
-        Lee el archivo JSON que contiene la asignación de los nodos a grupos. 
-
-        :return: Diccionario que vincula cada nodo con su grupo.
-        :rtype: Dict[int, int]
-        :raises ValueError: Si el archivo JSON no contiene una estructura reconocible.
-        """
-        with open(self.ruta_agrupamiento, 'r', encoding='utf-8') as f:
-            agrupamiento = json.load(f)
-
-        # Si es una lista, la convierte a dict {índice: grupo}.
-        if isinstance(agrupamiento, list):
-            return {i: g for i, g in enumerate(agrupamiento)}
-        elif isinstance(agrupamiento, dict):
-            # Para garantizar la consistencia, convierte las llaves a enteros si es posible.
-            nuevo_dict = {}
-            for k, v in agrupamiento.items():
-                try:
-                    k_int = int(k)
-                except ValueError:
-                    # Si no se puede convertir, se deja tal cual, pero se recomienda que sea int.
-                    k_int = k
-                nuevo_dict[k_int] = v
-            return nuevo_dict
-        else:
-            raise ValueError("La estructura del archivo JSON no es reconocible (dict o list).")
-
-    def _leer_shapefile(self) -> gpd.GeoDataFrame:
-        """
-        Lee el shapefile de AGEB usando geopandas y lo devuelve como GeoDataFrame.
-
-        :return: El GeoDataFrame resultante con la información de las AGEB.
-        :rtype: gpd.GeoDataFrame
-        :raises IOError: Si el shapefile no se puede leer.
-        """
-        try:
-            gdf = gpd.read_file(self.ruta_shapefile)
-            return gdf
-        except Exception as e:
-            raise IOError(f"No se pudo leer el shapefile: {e}")
-
-    def _generar_grupo_shapefile(
-        self,
-        grupo: int,
-        geometrias: List[Any],
-        crs_original: Any
-    ) -> None:
-        """
-        Crea un shapefile para un grupo específico, con todas las geometrías asignadas
-        a dicho grupo.
-
-        :param grupo: Identificador del grupo.
-        :type grupo: int
-        :param geometrias: Lista de geometrías (Shapely) pertenecientes al grupo.
-        :type geometrias: List[Any]
-        :param crs_original: Sistema de referencia de coordenadas (CRS) original del GeoDataFrame.
-        :type crs_original: Any
-        :return: No devuelve un valor.
-        :rtype: None
-        """
-        # Crea un GeoDataFrame con las geometrías de este grupo
-        gdf_grupo = gpd.GeoDataFrame(
-            {
-                "grupo": [grupo] * len(geometrias),
-                "geometry": geometrias
-            },
-            crs=crs_original
-        )
-
-        # Define la ruta de salida para este grupo
-        nombre_salida = os.path.join(self.directorio_salida, f"Sector_{grupo}.shp")
-
-        # Exporta el GeoDataFrame como shapefile
-        gdf_grupo.to_file(nombre_salida, driver='ESRI Shapefile', encoding='utf-8')
-        print(f"Grupo {grupo} exportado a {nombre_salida}.")
-
-    # -------------------------------------------------------------------------
-    # Método público
-    # -------------------------------------------------------------------------
-
-    def exportar_sectores(self) -> None:
-        """
-        Ejecuta el proceso de lectura del agrupamiento, lectura del shapefile
-        y partición de las geometrías en distintos shapefiles según la asignación
-        de grupos.
-        
-        :return: No devuelve un valor.
-        :rtype: None
-        """
-        # Lee el archivo JSON con la asignación de grupos
-        mejor_agrupamiento = self._leer_agrupamiento()
-        
-        # Lee el shapefile de AGEB
-        capa_gdf = self._leer_shapefile()
-
-        # Preparación de la estructura donde se almacenarán las geometrías por grupo
-        grupos_geometria: Dict[int, List[Any]] = {}
-
-        # Itera sobre cada feature del shapefile
-        for idx, row in capa_gdf.iterrows():
-            # Se utiliza directamente el índice del GeoDataFrame para identificar el nodo.
-            nodo = idx
-            
-            # Verifica si el nodo está en el agrupamiento
-            if nodo not in mejor_agrupamiento:
-                print(f"Advertencia: El nodo {nodo} no está en la asignación. Se omite.")
-                continue
-            
-            grupo = mejor_agrupamiento[nodo]
-            
-            if grupo not in grupos_geometria:
-                grupos_geometria[grupo] = []
-
-            grupos_geometria[grupo].append(row.geometry)
-
-        # Crea un shapefile separado para cada grupo
-        for grupo, lista_geoms in grupos_geometria.items():
-            self._generar_grupo_shapefile(
-                grupo=grupo,
-                geometrias=lista_geoms,
-                crs_original=capa_gdf.crs
-            )
-
-        print("Exportación de sectores completada.")
-
-
-# ============================================================================
 # Clase ProcesadorCalles
 # ============================================================================
 class ProcesadorCalles:
     """
-    Clase que se encarga de procesar y manipular la red vial de la Ciudad de México.
-    Proporciona métodos para recortar la red vial según los sectores AGEB y para corregir
-    la conectividad de las subgráficas resultantes, garantizando que cada una de estas
-    sea fuertemente conexa.
+    Clase encargada de procesar y manipular la red vial de la Ciudad de México (CDMX).
+    Proporciona funcionalidades para recortar la red vial según sectores específicos y corregir la
+    conectividad de las redes recortadas asegurando su integridad.
+    
+    .. Nota::
+        Este ejemplo asume que la red global está compuesta por los shapefiles
+        `aristas_cdmx_shp` y `nodos_cdmx_shp`. No se requiere una red adicional.
     """
 
     def __init__(
@@ -1033,945 +846,815 @@ class ProcesadorCalles:
         aristas_cdmx_shp: str,
         nodos_cdmx_shp: str,
         carpeta_sectores: str,
-        carpeta_calles: str,
-        carpeta_nodos: str,
         carpeta_salida_calles: str,
         carpeta_salida_nodos: str,
+        carpeta_salida_final: str = "./salida_final",
         crs_metrico: str = "EPSG:32614",
         crs_original: str = "EPSG:4326"
     ) -> None:
         """
-        Inicializa una instancia de la clase ProcesadorCalles configurando las rutas a los
-        shapefiles de la red vial de la Ciudad de México y estableciendo los directorios de
-        entrada y salida para el recorte y la corrección de la red.
+        Constructor de la clase ProcesadorCalles.
 
-        :param aristas_cdmx_shp: Ruta al shapefile que contiene las aristas de la red vial de la Ciudad de México.
+        Inicializa las rutas a los shapefiles de la red vial completa de CDMX, así como las carpetas
+        de entrada y salida para los procesos de recorte y corrección de la red.
+
+        :param aristas_cdmx_shp: Ruta al shapefile que contiene las aristas (calles) de la red vial de CDMX.
         :type aristas_cdmx_shp: str
-        :param nodos_cdmx_shp: Ruta al shapefile que contiene los nodos de la red vial de la Ciudad de México.
+        :param nodos_cdmx_shp: Ruta al shapefile que contiene los nodos (intersecciones) de la red vial de CDMX.
         :type nodos_cdmx_shp: str
-        :param carpeta_sectores: Directorio que contiene los shapefiles correspondientes a los sectores AGEB.
+        :param carpeta_sectores: Directorio que contiene los shapefiles de sectores (polígonos) utilizados para recortar la red vial.
         :type carpeta_sectores: str
-        :param carpeta_calles: Directorio donde se almacenarán los shapefiles de las calles recortadas.
-        :type carpeta_calles: str
-        :param carpeta_nodos: Directorio donde se almacenarán los shapefiles de los nodos recortados.
-        :type carpeta_nodos: str
-        :param carpeta_salida_calles: Directorio de salida para los shapefiles finales de calles corregidas.
+        :param carpeta_salida_calles: Directorio de salida donde se almacenarán las calles recortadas por sector.
         :type carpeta_salida_calles: str
-        :param carpeta_salida_nodos: Directorio de salida para los shapefiles finales de nodos corregidos.
+        :param carpeta_salida_nodos: Directorio de salida donde se almacenarán los nodos recortados por sector.
         :type carpeta_salida_nodos: str
-        :param crs_metrico: Sistema de referencia de coordenadas métrico a utilizar. Por defecto "EPSG:32614".
+        :param carpeta_salida_final: Directorio de salida donde se guardarán los shapefiles finales corregidos.
+                                      Por defecto, se establece en "./salida_final".
+        :type carpeta_salida_final: str
+        :param crs_metrico: Sistema de Referencia de Coordenadas (CRS) métrico utilizado para cálculos de longitud.
+                            Por defecto, se usa "EPSG:32614".
         :type crs_metrico: str
-        :param crs_original: Sistema de referencia de coordenadas original. Por defecto "EPSG:4326".
+        :param crs_original: Sistema de Referencia de Coordenadas (CRS) original para la conversión final.
+                             Por defecto, se usa "EPSG:4326".
         :type crs_original: str
-        :return: No devuelve ningún valor.
-        :rtype: None
         """
         self.aristas_cdmx_shp = aristas_cdmx_shp
         self.nodos_cdmx_shp = nodos_cdmx_shp
         self.carpeta_sectores = carpeta_sectores
-        self.carpeta_calles = carpeta_calles
-        self.carpeta_nodos = carpeta_nodos
         self.carpeta_salida_calles = carpeta_salida_calles
         self.carpeta_salida_nodos = carpeta_salida_nodos
+        self.carpeta_salida_final = carpeta_salida_final
         self.crs_metrico = crs_metrico
         self.crs_original = crs_original
 
-        # Crea los directorios de salida si no existen.
-        os.makedirs(self.carpeta_calles, exist_ok=True)
-        os.makedirs(self.carpeta_nodos, exist_ok=True)
+        # Crea las carpetas de salida si no existen para almacenar los resultados
         os.makedirs(self.carpeta_salida_calles, exist_ok=True)
         os.makedirs(self.carpeta_salida_nodos, exist_ok=True)
+        os.makedirs(self.carpeta_salida_final, exist_ok=True)
 
     # -------------------------------------------------------------------------
     # Métodos privados
     # -------------------------------------------------------------------------
 
-    def _leer_shapefile(self, ruta: str) -> gpd.GeoDataFrame:
+    def _leer_shapefile_con_fallback(self, ruta: str) -> gpd.GeoDataFrame:
         """
-        Lee un shapefile desde la ruta especificada utilizando una estrategia de fallback
-        en caso de error de codificación.
+        Lee un archivo shapefile utilizando codificación 'utf-8' y, en caso de fallo por error de decodificación,
+        intenta leerlo con codificación 'cp1252'.
 
-        Se intenta inicialmente leer el shapefile con codificación 'utf-8'. En caso de producirse
-        un error de decodificación, se reintenta la lectura utilizando la codificación 'cp1252'. Si
-        ambos intentos fallan, se lanza una excepción.
+        Este método garantiza la robustez en la lectura de shapefiles con diferentes codificaciones de caracteres.
 
-        :param ruta: Ruta del shapefile a leer.
+        :param ruta: Ruta al archivo shapefile que se desea leer.
         :type ruta: str
-        :return: GeoDataFrame que contiene los datos del shapefile.
+        :return: GeoDataFrame que contiene la información geográfica del shapefile leído.
         :rtype: gpd.GeoDataFrame
-        :raises ErrorShapefile: Si no se puede leer el shapefile con ninguna de las codificaciones.
+        :raises ErrorShapefile: Si falla al leer el shapefile con ambas codificaciones.
         """
         try:
-            # Se intenta cargar el shapefile utilizando la codificación UTF-8.
             return gpd.read_file(ruta, encoding='utf-8')
         except UnicodeDecodeError:
-            # Se informa que la codificación UTF-8 falló y se procede a intentar con la codificación cp1252.
-            print(f"[Aviso] Error de decodificación con UTF-8 para: {ruta}. Se intenta con cp1252.")
+            print(f"[Aviso] Error de decodificación con UTF-8 para: {ruta}. Probando con cp1252.")
             try:
                 return gpd.read_file(ruta, encoding='cp1252')
-            except Exception as excepcion:
-                # Se lanza una excepción personalizada si ambos intentos de lectura fallan.
-                raise ErrorShapefile(f"No se pudo leer el shapefile {ruta} con ninguna codificación: {excepcion}")
-        except Exception as excepcion:
-            # Se lanza una excepción en caso de producirse cualquier otro error al intentar leer el shapefile.
-            raise ErrorShapefile(f"Error al leer el shapefile {ruta}: {excepcion}")
+            except Exception as e:
+                raise ErrorShapefile(f"No se pudo leer el shapefile {ruta} con ninguna codificación: {e}")
+        except Exception as e:
+            raise ErrorShapefile(f"Error al leer el shapefile {ruta}: {e}")
 
     def _crear_grafica(
         self,
         gdf_nodos: gpd.GeoDataFrame,
         gdf_aristas: gpd.GeoDataFrame,
-        col_id_nodo: str = "osmid",
-        col_origen: str = "from",
-        col_destino: str = "to",
-        col_longitud: str = "length"
+        col_nodo_id: str = "osmid",
+        col_from: str = "from",
+        col_to: str = "to",
+        col_peso: str = "length"
     ) -> nx.DiGraph:
         """
-        Construye una gráfica dirigida a partir de los GeoDataFrames de nodos y aristas.
+        Crea una grafica dirigida a partir de GeoDataFrames que contienen información de nodos y aristas.
 
-        Cada nodo se añade a la gráfica con su posición (coordenadas X e Y) y su geometría, mientras que
-        cada arista se incorpora con su geometría y se utiliza la longitud como peso.
+        Este método integra los nodos y aristas en una estructura de gráfica de NetworkX, asignando atributos
+        relevantes como geometría y peso a cada elemento de la gráfica.
 
-        :param gdf_nodos: GeoDataFrame que contiene la información de los nodos.
+        :param gdf_nodos: GeoDataFrame que contiene la información de los nodos, incluyendo la columna identificadora.
         :type gdf_nodos: gpd.GeoDataFrame
-        :param gdf_aristas: GeoDataFrame que contiene la información de las aristas.
+        :param gdf_aristas: GeoDataFrame que contiene la información de las aristas, incluyendo columnas que indican los nodos de inicio y fin.
         :type gdf_aristas: gpd.GeoDataFrame
-        :param col_id_nodo: Nombre de la columna que identifica de forma única cada nodo. Por defecto "osmid".
-        :type col_id_nodo: str
-        :param col_origen: Nombre de la columna que indica el nodo de origen de cada arista. Por defecto "from".
-        :type col_origen: str
-        :param col_destino: Nombre de la columna que indica el nodo de destino de cada arista. Por defecto "to".
-        :type col_destino: str
-        :param col_longitud: Nombre de la columna que representa la longitud o peso de cada arista. Por defecto "length".
-        :type col_longitud: str
-        :return: Gráfica dirigida construida a partir de la información de nodos y aristas.
+        :param col_nodo_id: Nombre de la columna en `gdf_nodos` que identifica de forma única cada nodo. Por defecto, "osmid".
+        :type col_nodo_id: str
+        :param col_from: Nombre de la columna en `gdf_aristas` que indica el nodo de inicio de la arista. Por defecto, "from".
+        :type col_from: str
+        :param col_to: Nombre de la columna en `gdf_aristas` que indica el nodo de fin de la arista. Por defecto, "to".
+        :type col_to: str
+        :param col_peso: Nombre de la columna utilizada como peso para las aristas, generalmente representando la longitud. Por defecto, "length".
+        :type col_peso: str
+        :return: Gráfica dirigida de NetworkX que representa la red vial.
         :rtype: nx.DiGraph
-        :raises ErrorShapefile: Si falta alguna columna necesaria en los datos de nodos o aristas.
-        :raises ErrorRedVial: Si ocurre un error durante la construcción de la estructura gráfica.
+        :raises ErrorShapefile: Si faltan columnas requeridas en los shapefiles.
         """
-        # Se inicializa una gráfica dirigida vacía para representar la red vial.
-        grafica = nx.DiGraph()
+        G = nx.DiGraph()
+
         try:
-            # Se recorren los nodos del GeoDataFrame y se añaden a la gráfica con su posición y geometría.
-            for indice, nodo_actual in gdf_nodos.iterrows():
-                if col_id_nodo not in nodo_actual:
-                    # Se lanza un error si el identificador del nodo requerido no se encuentra presente.
-                    raise ErrorShapefile(f"La columna '{col_id_nodo}' falta en los nodos.")
-                grafica.add_node(nodo_actual[col_id_nodo],
-                                 pos=(nodo_actual.geometry.x, nodo_actual.geometry.y),
-                                 geometry=nodo_actual.geometry)
-            # Se recorren las aristas del GeoDataFrame y se añaden a la gráfica con su geometría y peso.
-            for indice, arista_actual in gdf_aristas.iterrows():
-                if col_origen not in arista_actual or col_destino not in arista_actual:
-                    # Se lanza un error si no se encuentran las columnas que indican el origen y destino de la arista.
-                    raise ErrorShapefile(f"Las columnas '{col_origen}' o '{col_destino}' faltan en las aristas.")
-                peso = arista_actual[col_longitud] if col_longitud in arista_actual else None
-                grafica.add_edge(arista_actual[col_origen],
-                                 arista_actual[col_destino],
-                                 geometry=arista_actual.geometry,
-                                 weight=peso)
-        except KeyError as excepcion:
-            # Se captura el error relacionado con la ausencia de alguna columna clave.
-            raise ErrorShapefile(f"Falta una columna en el shapefile: {excepcion}")
-        except Exception as excepcion:
-            # Se captura cualquier otro error que ocurra durante la construcción de la estructura gráfica.
-            raise ErrorRedVial(f"Error al construir la estructura de nodos y aristas: {excepcion}")
-        # Se retorna la gráfica dirigida construida a partir de la información proporcionada.
-        return grafica
+            # Agrega nodos a la gráfica con sus atributos correspondientes
+            for _, nodo in gdf_nodos.iterrows():
+                if col_nodo_id not in nodo:
+                    raise ErrorShapefile(f"La columna '{col_nodo_id}' falta en el GeoDataFrame de nodos.")
+                G.add_node(
+                    nodo[col_nodo_id],
+                    pos=(nodo.geometry.x, nodo.geometry.y),
+                    geometry=nodo.geometry
+                )
 
-    def _remover_nodos_grado_uno(
-        self, 
-        gdf_aristas: gpd.GeoDataFrame, 
-        gdf_nodos: gpd.GeoDataFrame, 
-        col_u: str = "u", 
-        col_v: str = "v"
-    ) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
-        """
-        Elimina de forma iterativa los nodos con grado uno y ajusta las aristas correspondientes en la red.
+            # Agrega aristas a la gráfica con sus atributos correspondientes
+            for _, arista in gdf_aristas.iterrows():
+                if col_from not in arista or col_to not in arista:
+                    raise ErrorShapefile(f"Las columnas '{col_from}' o '{col_to}' faltan en el GeoDataFrame de aristas.")
+                peso = arista[col_peso] if col_peso in arista else None  # Asigna el peso si la columna existe
+                G.add_edge(
+                    arista[col_from],
+                    arista[col_to],
+                    geometry=arista.geometry,
+                    weight=peso
+                )
+        except KeyError as e:
+            raise ErrorShapefile(f"Columna faltante en el shapefile: {e}")
+        except Exception as e:
+            raise ErrorRedVial(f"Error al crear la gráfica: {e}")
 
-        Se construye una gráfica temporal para determinar el grado de cada nodo y se remueven aquellos
-        nodos cuyo grado sea uno. Posteriormente, se filtran los GeoDataFrames de nodos y aristas para conservar
-        únicamente los elementos que conforman la subgráfica resultante.
-
-        :param gdf_aristas: GeoDataFrame que contiene las aristas de la red.
-        :type gdf_aristas: gpd.GeoDataFrame
-        :param gdf_nodos: GeoDataFrame que contiene los nodos de la red.
-        :type gdf_nodos: gpd.GeoDataFrame
-        :param col_u: Nombre de la columna que representa el nodo de origen en las aristas. Por defecto "u".
-        :type col_u: str
-        :param col_v: Nombre de la columna que representa el nodo de destino en las aristas. Por defecto "v".
-        :type col_v: str
-        :return: Tupla que contiene el GeoDataFrame de aristas filtrado y el GeoDataFrame de nodos filtrado.
-        :rtype: Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]
-        """
-        # Se crea una gráfica temporal para calcular el grado de cada nodo.
-        grafica_temporal = nx.DiGraph()
-        for indice, nodo_actual in gdf_nodos.iterrows():
-            grafica_temporal.add_node(nodo_actual["osmid"])
-        for indice, fila in gdf_aristas.iterrows():
-            # Se añaden las aristas a la gráfica temporal utilizando las columnas definidas.
-            grafica_temporal.add_edge(fila[col_u], fila[col_v])
-        
-        # Se identifican los nodos que tienen grado uno.
-        nodos_a_remover = [nodo for nodo, grado in dict(grafica_temporal.degree()).items() if grado == 1]
-        # Se eliminan de forma iterativa los nodos con grado uno hasta que ninguno quede.
-        while nodos_a_remover:
-            grafica_temporal.remove_nodes_from(nodos_a_remover)
-            nodos_a_remover = [nodo for nodo, grado in dict(grafica_temporal.degree()).items() if grado == 1]
-        
-        # Se define el conjunto de nodos finales que permanecen en la gráfica tras las eliminaciones.
-        nodos_finales = set(grafica_temporal.nodes())
-        # Se filtra el GeoDataFrame de nodos para conservar solamente aquellos que siguen en la subgráfica.
-        gdf_nodos_filtrado = gdf_nodos[gdf_nodos["osmid"].isin(nodos_finales)].copy()
-        # Se filtra el GeoDataFrame de aristas para incluir solamente aquellas conectadas a nodos válidos.
-        gdf_aristas_filtrado = gdf_aristas[
-            gdf_aristas.apply(lambda fila: fila[col_u] in nodos_finales and fila[col_v] in nodos_finales, axis=1)
-        ].copy()
-        
-        # Se retorna una tupla conteniendo los GeoDataFrames filtrados de aristas y nodos.
-        return gdf_aristas_filtrado, gdf_nodos_filtrado
+        return G
 
     # -------------------------------------------------------------------------
     # Métodos públicos
     # -------------------------------------------------------------------------
 
-    def recortar_grafica_por_sectores(self) -> None:
+    def recortar_red_vial_por_sectores(self) -> None:
         """
-        Recorta la red vial de la Ciudad de México de acuerdo con los sectores AGEB definidos en shapefiles.
+        Recorta la red vial de CDMX (aristas y nodos) según los sectores definidos en los shapefiles proporcionados.
 
-        Para cada sector, se unen todos los polígonos del shapefile correspondiente para generar una única
-        geometría de recorte. Después, se seleccionan las aristas que intersectan dicha geometría y se
-        identifican los nodos asociados. Los resultados se exportan a los directorios de salida configurados,
-        y se genera una visualización que superpone el polígono del sector, las calles recortadas y los nodos.
+        Este método realiza los siguientes pasos:
+        1. Carga los shapefiles de aristas y nodos de la red vial completa de CDMX.
+        2. Itera sobre cada shapefile de sector en la carpeta especificada:
+           - Obtiene la intersección de las aristas con el polígono del sector.
+           - Selecciona los nodos que están conectados a las aristas recortadas.
+           - Guarda las aristas y nodos recortados en shapefiles separados dentro de las carpetas de salida designadas.
+        3. Opcionalmente, genera una figura que muestra cada sector junto con su recorte correspondiente.
 
-        :return: No devuelve ningún valor.
-        :rtype: None
-        :raises ErrorShapefile: Si ocurre un error al leer, listar o escribir los shapefiles.
-        :raises ErrorRedVial: Si se produce un error durante el proceso de recorte.
+        Al finalizar, informa sobre la ubicación de los archivos guardados.
+
+        :raises ErrorShapefile: Si ocurre un error al leer o escribir shapefiles.
+        :raises ErrorRedVial: Si ocurre un error al procesar la red vial.
         """
+        # Carga los shapefiles de aristas y nodos de la red vial completa de CDMX
         try:
-            # Se cargan los shapefiles de aristas y nodos correspondientes a la red vial completa.
-            gdf_aristas_cdmx = self._leer_shapefile(self.aristas_cdmx_shp)
-            gdf_nodos_cdmx = self._leer_shapefile(self.nodos_cdmx_shp)
-        except ErrorShapefile as excepcion:
-            # Se lanza una excepción si ocurre un error durante la carga de los shapefiles.
-            raise ErrorShapefile(f"Error al cargar los shapefiles de la Ciudad de México: {excepcion}")
+            aristas_cdmx_gdf = self._leer_shapefile_con_fallback(self.aristas_cdmx_shp)
+            nodos_cdmx_gdf = self._leer_shapefile_con_fallback(self.nodos_cdmx_shp)
+        except ErrorShapefile as e:
+            raise ErrorShapefile(f"Error al cargar shapefiles de CDMX: {e}")
 
-        # Se configura la figura y los ejes para la visualización de la red y los sectores.
-        figura, eje = plt.subplots(figsize=(10, 10))
+        # Crea una figura para la visualización opcional de los recortes
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+        # Lista todos los archivos shapefile de sectores en la carpeta especificada
         try:
-            # Se obtiene la lista de archivos shapefile que contienen los sectores AGEB.
-            archivos_sectores = [archivo for archivo in os.listdir(self.carpeta_sectores) if archivo.endswith(".shp")]
-        except Exception as excepcion:
-            # Se lanza una excepción si ocurre un error al acceder al directorio de sectores.
-            raise ErrorShapefile(f"Error al listar archivos en {self.carpeta_sectores}: {excepcion}")
+            archivos_sectores = [
+                f for f in os.listdir(self.carpeta_sectores) if f.endswith(".shp")
+            ]
+        except Exception as e:
+            raise ErrorShapefile(f"Error al listar archivos en {self.carpeta_sectores}: {e}")
 
-        # Se itera sobre cada sector encontrado para procesarlo.
-        for archivo in tqdm(archivos_sectores, desc="Recortando sectores", ncols=80):
-            # Se construye la ruta completa del shapefile del sector.
+        ancho_barra = 80  # Define el ancho de la barra de progreso
+
+        # Itera sobre cada archivo de sector para realizar el recorte
+        for archivo in tqdm(archivos_sectores, desc="Recortando sectores", ncols=ancho_barra):
             ruta_sector = os.path.join(self.carpeta_sectores, archivo)
             try:
-                # Se lee el shapefile del sector.
-                gdf_sector = self._leer_shapefile(ruta_sector)
-            except ErrorShapefile as excepcion:
-                # Se informa de un error específico al leer el sector y se continúa con el siguiente.
-                print(f"[Error] No se pudo leer el sector {ruta_sector}: {excepcion}")
+                sector_gdf = self._leer_shapefile_con_fallback(ruta_sector)
+            except ErrorShapefile as e:
+                print(f"[Error] No se pudo leer el sector {ruta_sector}: {e}")
                 continue
 
             try:
-                # Se crea una única geometría de recorte a partir de la unión de todos los polígonos del sector.
-                poligono_sector = gdf_sector.unary_union
-                # Se seleccionan las aristas de la red que intersectan la geometría del sector.
-                calles_recortadas = gdf_aristas_cdmx[gdf_aristas_cdmx.intersects(poligono_sector)].copy()
-                # Se recopilan los identificadores de los nodos involucrados en las aristas recortadas.
-                ids_nodos = set()
-                for indice, calle in calles_recortadas.iterrows():
-                    if 'u' not in calle or 'v' not in calle:
-                        # Se lanza un error si las columnas 'u' o 'v' no están presentes en la información de la arista.
-                        raise ErrorShapefile("Faltan columnas 'u' o 'v' en las aristas.")
-                    ids_nodos.add(calle["u"])
-                    ids_nodos.add(calle["v"])
-                # Se filtran los nodos de la red que participan en las aristas recortadas.
-                nodos_recortados = gdf_nodos_cdmx[gdf_nodos_cdmx["osmid"].isin(ids_nodos)].copy()
-                # Se definen las rutas de salida para guardar los shapefiles de calles y nodos recortados.
-                ruta_salida_calles = os.path.join(self.carpeta_calles, f"{os.path.splitext(archivo)[0]}_calles.shp")
-                ruta_salida_nodos = os.path.join(self.carpeta_nodos, f"{os.path.splitext(archivo)[0]}_nodos.shp")
-                # Se exportan los datos recortados a archivos shapefile utilizando UTF-8.
-                calles_recortadas.to_file(ruta_salida_calles, encoding="utf-8")
-                nodos_recortados.to_file(ruta_salida_nodos, encoding="utf-8")
-                # Se procede a graficar el sector, las calles recortadas y los nodos sobre el mismo eje.
-                gdf_sector.plot(ax=eje, edgecolor="red", facecolor="none")
-                calles_recortadas.plot(ax=eje, color="blue", linewidth=0.8)
-                nodos_recortados.plot(ax=eje, color="green", markersize=8)
-            except ErrorShapefile as excepcion:
-                # Se informa de un error ocurrido durante el procesamiento del sector actual y se continúa con el siguiente.
-                print(f"[Error] En el sector {archivo}: {excepcion}")
-                continue
-            except Exception as excepcion:
-                # Se lanza una excepción general en caso de otros errores durante el recorte.
-                raise ErrorRedVial(f"Error al recortar el sector {archivo}: {excepcion}")
+                # Une múltiples polígonos en un solo polígono si es necesario
+                sector_poligono = sector_gdf.unary_union
 
-        # Se definen los elementos de la leyenda para la visualización de la gráfica.
-        elementos_leyenda = [
-            Line2D([0], [0], color='red', lw=2, label='Sectores'),
-            Line2D([0], [0], color='blue', lw=2, label='Calles'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='green', markersize=8, label='Nodos')
-        ]
-        # Se muestra la leyenda en la gráfica.
-        plt.legend(handles=elementos_leyenda, loc='best')
+                # Filtra las aristas que intersectan con el polígono del sector
+                calles_recortadas = aristas_cdmx_gdf[aristas_cdmx_gdf.intersects(sector_poligono)].copy()
+
+                # Identifica los nodos que están conectados a las aristas recortadas
+                nodos_ids = set()
+                for _, calle in calles_recortadas.iterrows():
+                    if 'u' not in calle or 'v' not in calle:
+                        raise ErrorShapefile("Las columnas 'u' y/o 'v' faltan en el shapefile de aristas.")
+                    nodos_ids.add(calle["u"])  # Nodo de origen
+                    nodos_ids.add(calle["v"])  # Nodo de destino
+
+                # Filtra los nodos que están presentes en las aristas recortadas
+                nodos_recortados = nodos_cdmx_gdf[nodos_cdmx_gdf["osmid"].isin(nodos_ids)].copy()
+
+                # Define las rutas de salida para las calles y nodos recortados
+                nombre_base = os.path.splitext(archivo)[0]
+                salida_calles = os.path.join(self.carpeta_salida_calles, f"{nombre_base}_calles.shp")
+                salida_nodos = os.path.join(self.carpeta_salida_nodos, f"{nombre_base}_nodos.shp")
+
+                # Guarda las calles y nodos recortados en los shapefiles correspondientes
+                calles_recortadas.to_file(salida_calles, encoding="utf-8")
+                nodos_recortados.to_file(salida_nodos, encoding="utf-8")
+
+                # Opcionalmente, grafica el sector y sus recortes
+                sector_gdf.plot(ax=ax, edgecolor="red", facecolor="none")
+                calles_recortadas.plot(ax=ax, color="blue", linewidth=0.8)
+                nodos_recortados.plot(ax=ax, color="green", markersize=8)
+            except ErrorShapefile as e:
+                print(f"[Error] Durante el procesamiento del sector {archivo}: {e}")
+                continue
+            except Exception as e:
+                raise ErrorRedVial(f"Error durante el recorte del sector {archivo}: {e}")
+
+        # Configura la visualización de la figura
         plt.yticks([])
         plt.xticks([])
-        # Se despliega la figura resultante.
         plt.show()
-        # Se informa en consola la finalización del proceso y la ubicación de los archivos generados.
-        print("Proceso de recorte completado. Archivos guardados en:")
-        print(f" - Calles recortadas: {self.carpeta_calles}")
-        print(f" - Nodos recortados: {self.carpeta_nodos}")
 
+        # Informa al usuario sobre la finalización del proceso y la ubicación de los archivos guardados
+        print("Proceso de recorte completado. Archivos guardados en:")
+        print(f" - {self.carpeta_salida_calles}")
+        print(f" - {self.carpeta_salida_nodos}")
 
     def corregir_conectividad(
-        self, 
-        nodos_recortados_shp: str, 
-        aristas_recortadas_shp: str
+            self, 
+            nodos_recortados_shp: str, 
+            aristas_recortadas_shp: str
     ) -> None:
         """
-        Corrige la conectividad de un sector recortado para garantizar que la subgráfica resultante
-        sea fuertemente conexa. Toma los siguientes pasos:
+        Corrige la conectividad de un sector recortado de la red vial de CDMX utilizando la red completa como referencia.
 
-        - Carga y convierte los shapefiles del sector recortado y de la red vial completa al CRS métrico.
-        - Cálculo de la longitud de las aristas y construcción de las gráficas dirigidas para la subgráfica
-            local y la red global de la Ciudad de México.
-        - Identificación de los nodos originales de la subgráfica y verificación de sus componentes fuertemente conexas.
-        - Generación de pares de nodos entre componentes distintas y búsqueda de la ruta más corta en la red global.
-        - Segmentación de las rutas encontradas para crear aristas de conexión e incorporación de dichas aristas a la subgráfica local.
-        - Adición de aristas directas de la red global que conecten nodos pertenecientes a la subgráfica.
-        - Eliminación iterativa de nodos de grado uno para depurar la subgráfica.
-        - Conversión de los resultados finales al CRS original y exportación de los shapefiles corregidos.
+        Este método garantiza que la red recortada sea totalmente conectada, añadiendo las aristas necesarias
+        basándose en los caminos existentes en la red global de CDMX.
 
-        :param nodos_recortados_shp: Ruta al shapefile que contiene los nodos del sector recortado.
+        Los pasos realizados son:
+        1. Carga los shapefiles de nodos y aristas recortados del sector específico, así como los shapefiles
+           de la red vial completa de CDMX.
+        2. Convierte todas las geometrías a un Sistema de Referencia de Coordenadas (CRS) métrico para facilitar
+           el cálculo preciso de longitudes.
+        3. Crea gráficas dirigidas tanto para la red local (recortada) como para la red global.
+        4. Identifica pares de nodos en la red local que no están conectados por ningún camino.
+        5. Para cada par de nodos sin conexión, busca el camino más corto en la red global y agrega las
+           aristas correspondientes a la red local para restablecer la conectividad.
+        6. Convierte las geometrías de vuelta al CRS original y guarda los shapefiles finales corregidos.
+
+        :param nodos_recortados_shp: Ruta al shapefile que contiene los nodos recortados del sector a corregir.
         :type nodos_recortados_shp: str
-        :param aristas_recortadas_shp: Ruta al shapefile que contiene las aristas del sector recortado.
+        :param aristas_recortadas_shp: Ruta al shapefile que contiene las aristas recortadas del sector a corregir.
         :type aristas_recortadas_shp: str
-        :return: No devuelve ningún valor.
-        :rtype: None
-        :raises ErrorShapefile: Si ocurre un error al leer o escribir alguno de los shapefiles.
-        :raises ErrorRedVial: Si ocurre un error durante la conversión del CRS o en el proceso de corrección de conectividad.
+        :raises ErrorShapefile: Si ocurre un error al leer o escribir shapefiles.
+        :raises ErrorRedVial: Si ocurre un error al procesar la red vial.
         """
+        # (1) Cargar shapefiles locales (recortados) y completos (globales) de CDMX
         try:
-            # Se cargan los shapefiles del sector recortado y de la red vial completa.
-            gdf_nodos_local = self._leer_shapefile(nodos_recortados_shp)
-            gdf_aristas_local = self._leer_shapefile(aristas_recortadas_shp)
-            gdf_nodos_cdmx = self._leer_shapefile(self.nodos_cdmx_shp)
-            gdf_aristas_cdmx = self._leer_shapefile(self.aristas_cdmx_shp)
-        except ErrorShapefile as excepcion:
-            # Se lanza una excepción si falla la carga de alguno de los shapefiles.
-            raise ErrorShapefile(f"Error al cargar los shapefiles: {excepcion}")
+            nodos_local_gdf = self._leer_shapefile_con_fallback(nodos_recortados_shp)
+            aristas_local_gdf = self._leer_shapefile_con_fallback(aristas_recortadas_shp)
+            nodos_cdmx_gdf = self._leer_shapefile_con_fallback(self.nodos_cdmx_shp)
+            aristas_cdmx_gdf = self._leer_shapefile_con_fallback(self.aristas_cdmx_shp)
+        except ErrorShapefile as e:
+            raise ErrorShapefile(f"Error al cargar shapefiles: {e}")
 
+        # (2) Convertir todas las geometrías al CRS métrico para cálculos precisos de longitud
         try:
-            # Se convierten todos los GeoDataFrames al sistema de referencia métrico configurado.
-            gdf_nodos_local = gdf_nodos_local.to_crs(self.crs_metrico)
-            gdf_aristas_local = gdf_aristas_local.to_crs(self.crs_metrico)
-            gdf_nodos_cdmx = gdf_nodos_cdmx.to_crs(self.crs_metrico)
-            gdf_aristas_cdmx = gdf_aristas_cdmx.to_crs(self.crs_metrico)
-        except Exception as excepcion:
-            # Se lanza una excepción en caso de error durante la conversión de CRS.
-            raise ErrorRedVial(f"Error al convertir el CRS: {excepcion}")
+            nodos_local_gdf = nodos_local_gdf.to_crs(self.crs_metrico)
+            aristas_local_gdf = aristas_local_gdf.to_crs(self.crs_metrico)
+            nodos_cdmx_gdf = nodos_cdmx_gdf.to_crs(self.crs_metrico)
+            aristas_cdmx_gdf = aristas_cdmx_gdf.to_crs(self.crs_metrico)
+        except Exception as e:
+            raise ErrorRedVial(f"Error al convertir CRS: {e}")
 
-        # Se calcula la longitud de cada arista en los GeoDataFrames locales y globales.
-        gdf_aristas_local["length"] = gdf_aristas_local.geometry.length
-        gdf_aristas_cdmx["length"] = gdf_aristas_cdmx.geometry.length
+        # (3) Calcular longitudes de las aristas y crear gráficas dirigidas para las redes local y global
+        try:
+            aristas_local_gdf["length"] = aristas_local_gdf.geometry.length
+            aristas_cdmx_gdf["length"] = aristas_cdmx_gdf.geometry.length
 
-        # Se construyen las gráficas dirigidas para la subred local y la red vial completa.
-        grafica_local = self._crear_grafica(
-            gdf_nodos=gdf_nodos_local,
-            gdf_aristas=gdf_aristas_local,
-            col_id_nodo="osmid",
-            col_origen="from",
-            col_destino="to",
-            col_longitud="length"
-        )
-        grafica_cdmx = self._crear_grafica(
-            gdf_nodos=gdf_nodos_cdmx,
-            gdf_aristas=gdf_aristas_cdmx,
-            col_id_nodo="osmid",
-            col_origen="from",
-            col_destino="to",
-            col_longitud="length"
-        )
+            G_local = self._crear_grafica(
+                gdf_nodos=nodos_local_gdf,
+                gdf_aristas=aristas_local_gdf,
+                col_nodo_id="osmid",
+                col_from="from",
+                col_to="to",
+                col_peso="length"
+            )
 
-        # Se determina el conjunto de nodos originales que forman parte del sector recortado.
-        nodos_originales = set(gdf_nodos_local["osmid"])
-        # Se obtienen las componentes fuertemente conexas de la subred local.
-        componentes_fuertemente_conexas = list(nx.strongly_connected_components(grafica_local))
-        if len(componentes_fuertemente_conexas) <= 1:
-            # Se informa que la subred ya es fuertemente conexa y no requiere correcciones.
-            print("La subgráfica ya es fuertemente conexa. No se requieren correcciones de rutas.")
-        else:
-            # Se informa la cantidad de componentes encontradas que requieren ser conectadas.
-            print(f"Se encontraron {len(componentes_fuertemente_conexas)} componentes fuertemente conexas en la subgráfica recortada.")
-            pares_entre_componentes = []
-            # Se generan pares de nodos pertenecientes a componentes distintas para intentar conectarlos.
-            for i in range(len(componentes_fuertemente_conexas)):
-                for j in range(i + 1, len(componentes_fuertemente_conexas)):
-                    for nodo_i in componentes_fuertemente_conexas[i]:
-                        for nodo_j in componentes_fuertemente_conexas[j]:
-                            pares_entre_componentes.append((nodo_i, nodo_j))
-                            pares_entre_componentes.append((nodo_j, nodo_i))
-            
-            print(f"Se identificaron {len(pares_entre_componentes)} pares de nodos para conectar entre componentes.")
-            
-            rutas_globales = {}
-            aristas_agregadas = 0
-            # Se itera sobre cada par de nodos para intentar establecer una conexión en la red.
-            with tqdm(total=len(pares_entre_componentes), desc="Corrigiendo conectividad", ncols=80) as barra:
-                for (nodo_desde, nodo_hasta) in pares_entre_componentes:
-                    if nx.has_path(grafica_local, nodo_desde, nodo_hasta):
-                        barra.update(1)
-                        continue
+            G_cdmx = self._crear_grafica(
+                gdf_nodos=nodos_cdmx_gdf,
+                gdf_aristas=aristas_cdmx_gdf,
+                col_nodo_id="osmid",
+                col_from="from",
+                col_to="to",
+                col_peso="length"
+            )
+        except ErrorShapefile as e:
+            raise ErrorShapefile(f"Error al crear gráficas dirigidas: {e}")
+        except Exception as e:
+            raise ErrorRedVial(f"Error al procesar las aristas: {e}")
 
+        # (4) Identificar pares de nodos en la red local que no están conectados por ningún camino
+        nodos_local = list(G_local.nodes)
+        parejas_no_conexas = []
+        try:
+            for n_orig in nodos_local:
+                for n_dest in nodos_local:
+                    if n_orig != n_dest and not nx.has_path(G_local, n_orig, n_dest):
+                        parejas_no_conexas.append((n_orig, n_dest))
+        except Exception as e:
+            raise ErrorRedVial(f"Error al identificar parejas no conectadas: {e}")
+
+        print(f"Se encontraron {len(parejas_no_conexas)} pares de nodos sin ruta en la red local.")
+
+        # (5) Para cada par sin conexión, buscar el camino más corto en la red global y agregar las aristas faltantes a la red local
+        ancho_barra = 80
+        sin_ruta_global = []  # Lista para almacenar pares de nodos que no tienen ruta ni en la red global
+        try:
+            with tqdm(total=len(parejas_no_conexas), desc="Corrigiendo conectividad", ncols=ancho_barra) as pbar:
+                for (n_from, n_to) in parejas_no_conexas:
                     try:
-                        # Se obtiene o calcula la ruta más corta en la red vial completa entre los nodos indicados.
-                        if (nodo_desde, nodo_hasta) in rutas_globales:
-                            ruta_global, longitud_global = rutas_globales[(nodo_desde, nodo_hasta)]
-                        else:
-                            ruta_global = nx.shortest_path(grafica_cdmx, source=nodo_desde, target=nodo_hasta, weight="weight")
-                            longitud_global = sum(
-                                grafica_cdmx[ruta_global[i]][ruta_global[i+1]]["weight"] 
-                                for i in range(len(ruta_global) - 1)
-                            )
-                            rutas_globales[(nodo_desde, nodo_hasta)] = (ruta_global, longitud_global)
+                        ruta = nx.shortest_path(G_cdmx, source=n_from, target=n_to, weight='weight')
                     except nx.NetworkXNoPath:
-                        barra.update(1)
+                        sin_ruta_global.append((n_from, n_to))
+                        pbar.update(1)
                         continue
-                    
-                    # Se identifican los índices de los nodos de la ruta que pertenecen a la subred local.
-                    indices_nodos_locales = [i for i, nodo in enumerate(ruta_global) if nodo in nodos_originales]
-                    segmentos_procesados = []
-                    # Se segmenta la ruta global en tramos conectados entre nodos presentes en la subred.
-                    for indice_seg in range(len(indices_nodos_locales) - 1):
-                        idx_inicio = indices_nodos_locales[indice_seg]
-                        idx_fin = indices_nodos_locales[indice_seg + 1]
-                        nodo_inicial = ruta_global[idx_inicio]
-                        nodo_final = ruta_global[idx_fin]
-                        
-                        if grafica_local.has_edge(nodo_inicial, nodo_final):
+
+                    aristas_nuevas = []
+                    long_total = 0.0
+                    oneway_vals = []
+
+                    # Recorrer la ruta obtenida para unir las geometrías de las aristas
+                    for i in range(len(ruta) - 1):
+                        sub_from = ruta[i]
+                        sub_to = ruta[i + 1]
+
+                        filtro = ((aristas_cdmx_gdf["from"] == sub_from) & (aristas_cdmx_gdf["to"] == sub_to))
+                        if not filtro.any():
+                            # En caso de que la arista no exista en la red global (lo cual es raro)
                             continue
-                        
-                        # Se inicializan acumuladores para las coordenadas, longitud y valores de oneway de cada tramo.
-                        coordenadas_segmento = []
-                        longitud_segmento = 0
-                        oneways_segmento = []
-                        
-                        # Se recorre la subruta para agregar las características de cada segmento entre nodos.
-                        for sub_idx in range(idx_inicio, idx_fin):
-                            nodo_actual = ruta_global[sub_idx]
-                            nodo_siguiente = ruta_global[sub_idx + 1]
-                            datos_arista = grafica_cdmx.get_edge_data(nodo_actual, nodo_siguiente)
-                            if datos_arista is None:
-                                continue
-                                
-                            geometria = datos_arista.get("geometry")
-                            longitud_tramo = datos_arista.get("weight", 0.0)
-                            valor_oneway = datos_arista.get("oneway", "False")
-                            
-                            if geometria is None:
-                                continue
-                            
-                            coordenadas_arista = list(geometria.coords)
-                            if not coordenadas_segmento:
-                                coordenadas_segmento = coordenadas_arista
-                            else:
-                                if coordenadas_segmento[-1] == coordenadas_arista[0]:
-                                    coordenadas_segmento.extend(coordenadas_arista[1:])
-                                else:
-                                    coordenadas_segmento.extend(coordenadas_arista)
-                                    
-                            longitud_segmento += longitud_tramo
-                            oneways_segmento.append(valor_oneway)
-                        
-                        if coordenadas_segmento and len(coordenadas_segmento) >= 2:
-                            # Se construye una nueva línea a partir de las coordenadas acumuladas.
-                            nueva_linea = LineString(coordenadas_segmento)
-                            conjunto_oneway = set(oneways_segmento)
-                            if conjunto_oneway == {"True"}:
-                                valor_oneway_final = 1
-                            elif conjunto_oneway == {"False"}:
-                                valor_oneway_final = 0
-                            else:
-                                valor_oneway_final = 1
-                            
-                            segmentos_procesados.append({
-                                "from": nodo_inicial,
-                                "to": nodo_final,
-                                "geometry": nueva_linea,
-                                "length": longitud_segmento,
-                                "oneway": valor_oneway_final
-                            })
-                    
-                    # Se agregan los segmentos procesados a la subred si no existen ya como aristas.
-                    for segmento in segmentos_procesados:
-                        if not grafica_local.has_edge(segmento["from"], segmento["to"]):
-                            nueva_arista_flag = True
-                            for arista_existente in grafica_local.edges(segmento["from"]):
-                                if arista_existente[1] == segmento["to"]:
-                                    nueva_arista_flag = False
-                                    break
-                            if nueva_arista_flag:
-                                gdf_nueva_arista = gpd.GeoDataFrame([segmento], geometry="geometry", crs=gdf_aristas_local.crs)
-                                gdf_aristas_local = pd.concat([gdf_aristas_local, gdf_nueva_arista], ignore_index=True)
-                                grafica_local.add_edge(
-                                    segmento["from"],
-                                    segmento["to"],
-                                    geometry=segmento["geometry"],
-                                    weight=segmento["length"],
-                                    oneway=segmento["oneway"]
-                                )
-                                aristas_agregadas += 1
-                    
-                    if aristas_agregadas > 0 and aristas_agregadas % 10 == 0:
-                        if nx.is_strongly_connected(grafica_local):
-                            print("\nLa subgráfica recortada es fuertemente conexa.")
-                            break
-                    
-                    barra.update(1)
 
-        print("\nAgregando aristas directas:")
-        aristas_agregadas_existentes = 0
-        # Se agregan aristas directas que existan en la red global para conectar nodos de la subred.
-        for (nodo_origen, nodo_destino) in grafica_cdmx.edges():
-            if nodo_origen in nodos_originales and nodo_destino in nodos_originales:
-                if not grafica_local.has_edge(nodo_origen, nodo_destino):
-                    datos_arista = grafica_cdmx.get_edge_data(nodo_origen, nodo_destino, default={})
-                    geometria = datos_arista.get("geometry", None)
-                    longitud_arista = datos_arista.get("weight", 0.0)
-                    valor_oneway = datos_arista.get("oneway", 1)
-                    
-                    if geometria is not None:
+                        geom_arista = aristas_cdmx_gdf.loc[filtro, "geometry"].iloc[0]
+                        if len(geom_arista.coords) <= 2:
+                            # Ignora aristas demasiado simplificadas
+                            continue
+
+                        aristas_nuevas.append(geom_arista)
+                        long_total += aristas_cdmx_gdf.loc[filtro, "length"].values[0]
+                        oneway_vals.append(aristas_cdmx_gdf.loc[filtro, "oneway"].values[0])
+
+                    if aristas_nuevas:
+                        # Combina las geometrías de las aristas nuevas en un solo LineString
+                        linea_combinada = LineString([pt for g in aristas_nuevas for pt in g.coords])
+
+                        # Determina el valor final de "oneway" si es consistente a lo largo de la ruta
+                        if len(set(oneway_vals)) == 1:
+                            oneway_final = str(oneway_vals[0])
+                        else:
+                            oneway_final = ";".join(map(str, oneway_vals))
+
+                        # Crea un nuevo registro de arista con la geometría combinada y los atributos correspondientes
                         nueva_arista = {
-                            "from": nodo_origen,
-                            "to": nodo_destino,
-                            "geometry": geometria,
-                            "length": longitud_arista,
-                            "oneway": valor_oneway
+                            "from": n_from,
+                            "to": n_to,
+                            "geometry": linea_combinada,
+                            "length": long_total,
+                            "oneway": oneway_final
                         }
-                        gdf_nueva_arista = gpd.GeoDataFrame([nueva_arista], geometry="geometry", crs=gdf_aristas_local.crs)
-                        gdf_aristas_local = pd.concat([gdf_aristas_local, gdf_nueva_arista], ignore_index=True)
-                        grafica_local.add_edge(
-                            nodo_origen,
-                            nodo_destino,
-                            geometry=geometria,
-                            weight=longitud_arista,
-                            oneway=valor_oneway
+                        nueva_arista_gdf = gpd.GeoDataFrame(
+                            [nueva_arista],
+                            geometry="geometry",
+                            crs=aristas_local_gdf.crs
                         )
-                        aristas_agregadas_existentes += 1
+                        # Añade la nueva arista al GeoDataFrame de aristas locales
+                        aristas_local_gdf = pd.concat([aristas_local_gdf, nueva_arista_gdf], ignore_index=True)
 
-        if aristas_agregadas_existentes > 0:
-            print(f"Se agregaron {aristas_agregadas_existentes} aristas directas que existían en la red global.")
-        else:
-            print("No se encontraron aristas directas adicionales para agregar.")
+                    pbar.update(1)
+        except Exception as e:
+            raise ErrorRedVial(f"Error durante la corrección de conectividad: {e}")
 
-        print("\nEliminando nodos de grado 1 de la subgráfica recortada...")
-        # Se invoca el método para eliminar nodos con grado uno y limpiar la subred.
-        gdf_aristas_local, gdf_nodos_local = self._remover_nodos_grado_uno(
-            gdf_aristas=gdf_aristas_local,
-            gdf_nodos=gdf_nodos_local,
-            col_u="from",
-            col_v="to"
-        )
-        
+        # (6) Convertir las geometrías de vuelta al CRS original para mantener la consistencia geográfica
         try:
-            # Se reestablece el CRS original para los GeoDataFrames finales.
-            gdf_nodos_local = gdf_nodos_local.to_crs(self.crs_original)
-            gdf_aristas_local = gdf_aristas_local.to_crs(self.crs_original)
-        except Exception as excepcion:
-            raise ErrorRedVial(f"Error al convertir el CRS de regreso al original: {excepcion}")
-            
+            nodos_local_gdf = nodos_local_gdf.to_crs(self.crs_original)
+            aristas_local_gdf = aristas_local_gdf.to_crs(self.crs_original)
+        except Exception as e:
+            raise ErrorRedVial(f"Error al convertir CRS de vuelta al original: {e}")
+
+        # (7) Guardar shapefiles resultantes utilizando el nombre base del archivo original
         try:
-            # Se definen los nombres base y las rutas finales para guardar los shapefiles corregidos.
+            # Extrae el nombre base del archivo de nodos recortados para construir el nombre de salida
             base_nodos = os.path.splitext(os.path.basename(nodos_recortados_shp))[0]
-            ruta_salida_nodos_finales = os.path.join(self.carpeta_salida_nodos, base_nodos + "_finales.shp")
+            # Define la ruta de salida para los nodos finales corregidos
+            nombre_nodos_salida = os.path.join(
+                self.carpeta_salida_final,
+                base_nodos + "_finales.shp"
+            )
+
+            # Extrae el nombre base del archivo de aristas recortadas para construir el nombre de salida
             base_aristas = os.path.splitext(os.path.basename(aristas_recortadas_shp))[0]
-            ruta_salida_aristas_finales = os.path.join(self.carpeta_salida_calles, base_aristas + "_finales.shp")
-            # Se guardan los shapefiles finales con codificación UTF-8.
-            gdf_nodos_local.to_file(ruta_salida_nodos_finales, encoding="utf-8")
-            gdf_aristas_local.to_file(ruta_salida_aristas_finales, encoding="utf-8")
-        except Exception as excepcion:
-            raise ErrorShapefile(f"Error al guardar los shapefiles finales: {excepcion}")
-        
-        # Se informa en consola la cantidad de componentes fuertes antes de la corrección y la finalización del proceso.
-        print(f'\nHabía {len(componentes_fuertemente_conexas)} componentes fuertemente conexas antes de la corrección.')
-        print("Corrección de conectividad completada.")
-        print("Shapefiles finales guardados en:")
-        print(f" - Nodos: {ruta_salida_nodos_finales}")
-        print(f" - Calles: {ruta_salida_aristas_finales}")
+            # Define la ruta de salida para las aristas finales corregidas
+            nombre_aristas_salida = os.path.join(
+                self.carpeta_salida_final,
+                base_aristas + "_finales.shp"
+            )
+
+            # Guarda los shapefiles finales corregidos en las rutas de salida definidas
+            nodos_local_gdf.to_file(nombre_nodos_salida)
+            aristas_local_gdf.to_file(nombre_aristas_salida)
+        except Exception as e:
+            raise ErrorShapefile(f"Error al guardar shapefiles finales: {e}")
+
+        # Informa al usuario sobre la finalización del proceso y la ubicación de los archivos guardados
+        print("\nCorrección de conectividad completada.")
+        print(f"Shapefiles guardados en: {self.carpeta_salida_final}")
+        print(f" - {os.path.basename(nombre_nodos_salida)}")
+        print(f" - {os.path.basename(nombre_aristas_salida)}")
+        if sin_ruta_global:
+            print("Los siguientes pares de nodos no tienen ruta ni en la red global:")
+            print(sin_ruta_global)
 
 
 # ============================================================================
-# Clase ResolverMTSP
+# Clase ResolverTSP
 # ============================================================================
 class ResolverTSP:
     """
-    Permite resolver el Problema del Agente Viajero usando el algoritmo genético eltista
-    sobre una red vial representada como un DiGraph de NetworkX. A cada arista se le asigna un
-    peso basado en la longitud, y se busca la ruta (ciclo) que minimice la distancia total para
-    visitar la mayor cantidad de nodos posible (idealmente todos), ya sea en redes fuertemente
-    conexas o en aquellas compuestas por múltiples SCC.
-
-    Se han incorporado dos variantes en la construcción de la ruta completa:
-      - Para redes fuertemente conexas se evita la inclusión de nodos intermedios ya visitados.
-        El objetivo es aproximarse a un ciclo hamiltoniano que abarque los nodos requeridos.
-      - Para redes con múltiples SCC se realiza el mismo procedimiento en cada componente,
-        calculando un ciclo interno (o aproximación) en cada SCC.
+    Esta clase se encarga de resolver el Problema del Viajante (TSP) utilizando un algoritmo genético con elitismo.
+    
+    El algoritmo opera sobre una red vial representada por un MultiDiGraph de NetworkX, asignando pesos a las aristas 
+    según la distancia (longitud) y asegurando la conectividad de la red. Busca la ruta que minimice la distancia total 
+    recorrida para visitar cada nodo seleccionado exactamente una vez.
     """
 
     def __init__(
             self,
             ruta_nodos: str,
             ruta_aristas: str,
-            grafica: nx.DiGraph = None,
+            grafica: nx.MultiDiGraph = None,
             tamano_poblacion: int = 750,
             generaciones: int = 1500,
             tasa_mutacion: float = 0.01,
-            tamano_elite: float = 0.3
+            proporcion_elite: float = 0.1
     ):
         """
-        Inicializa los parámetros necesarios para ejecutar el algoritmo genético que soluciona el TSP.
-        
-        :param ruta_nodos: Ruta al shapefile con los nodos de la red vial.
-        :param ruta_aristas: Ruta al shapefile con las aristas de la red vial.
-        :param grafica: Gráfica dirigida (opcional) que representa la red vial. Si no se proporciona,
-                        se crea a partir de los shapefiles.
-        :param tamano_poblacion: Número de individuos en la población inicial.
-        :param generaciones: Número de iteraciones (generaciones) para el algoritmo genético.
-        :param tasa_mutacion: Probabilidad de aplicación de mutación a cada individuo.
-        :param tamano_elite: Proporción de individuos de la población que se preservan (elitismo) en cada generación.
+        Inicializa una instancia de ResolverTSP con los parámetros necesarios para la ejecución del algoritmo genético.
+
+        :param ruta_nodos: Ruta al archivo shapefile que contiene los nodos de la red vial.
+        :type ruta_nodos: str
+        :param ruta_aristas: Ruta al archivo shapefile que contiene las aristas de la red vial.
+        :type ruta_aristas: str
+        :param grafica: Gráfica dirigida múltiple que representa la red vial. 
+                        Si se proporciona, se utilizará en lugar de crear uno nuevo.
+        :type grafica: nx.MultiDiGraph, optional
+        :param tamano_poblacion: Número de individuos en la población inicial del algoritmo genético.
+        :type tamano_poblacion: int, default=750
+        :param generaciones: Número de iteraciones o generaciones que el algoritmo genético ejecutará para 
+                             evolucionar la población.
+        :type generaciones: int, default=1500
+        :param tasa_mutacion: Probabilidad de que un individuo sufra una mutación durante el proceso de evolución.
+        :type tasa_mutacion: float, default=0.01
+        :param proporcion_elite: Proporción (entre 0 y 1) de individuos de élite que se preservarán directamente 
+                                 en la siguiente generación.
+        :type proporcion_elite: float, default=0.1
         """
         self.ruta_nodos = ruta_nodos
         self.ruta_aristas = ruta_aristas
-        self.grafica = grafica if grafica is not None else self._crear_red_vial()
+        # Emplea la gráfica proporcionada o crea una nueva a partir de los shapefiles
+        self.grafica = grafica if grafica is not None else self._crear_red_vial()  
         self.tamano_poblacion = tamano_poblacion
         self.generaciones = generaciones
         self.tasa_mutacion = tasa_mutacion
-        self.tamano_elite = tamano_elite
+        self.proporcion_elite = proporcion_elite
 
     # -------------------------------------------------------------------------
     # Métodos privados
     # -------------------------------------------------------------------------
-    def _crear_red_vial(self) -> nx.DiGraph:
+
+    def _crear_red_vial(self) -> nx.MultiDiGraph:
         """
-        Lee los shapefiles de nodos y aristas utilizando GeoPandas y construye la red vial.
-        
-        Verifica la existencia de las columnas mínimas requeridas, crea la columna 'key' si no existe
-        y replica las aristas correspondientes a calles de doble sentido (oneway=0) para garantizar la bidireccionalidad.
-        
-        :devuelve: Gráfica dirigida (DiGraph) que representa la red vial.
-        :raises ErrorShapefile: Si ocurre un error en la lectura o procesamiento de los shapefiles.
-        :raises ErrorRedVial: Si ocurre un error al construir la gráfica.
+        Crea la red vial a partir de los archivos shapefile de nodos y aristas.
+
+        Utiliza GeoPandas para leer los shapefiles y luego integra la información en una gráfica 
+        dirigido múltiple de NetworkX mediante OSMNX. Asigna atributos relevantes, como la geometría 
+        y la longitud, a cada arista.
+
+        :return: Gráfica dirigida múltiple que representa la red vial.
+        :rtype: nx.MultiDiGraph
+        :raises ErrorShapefile: Si faltan columnas requeridas en los shapefiles.
+        :raises ErrorRedVial: Si ocurre un error al crear la gráfica.
         """
         try:
-            gdf_nodos = gpd.read_file(self.ruta_nodos)
-            gdf_aristas = gpd.read_file(self.ruta_aristas)
+            gdf_nodes = gpd.read_file(self.ruta_nodos)
+            gdf_edges = gpd.read_file(self.ruta_aristas)
         except Exception as e:
-            raise ErrorShapefile(f"Error al leer los shapefiles: {e}")
+            raise ErrorShapefile(f"Error al leer shapefiles de nodos o aristas: {e}")
 
-        if 'osmid' not in gdf_nodos.columns:
-            raise ErrorShapefile("El shapefile de nodos debe incluir la columna 'osmid'.")
-        gdf_nodos.set_index('osmid', inplace=True)
+        # Verifica que la columna 'osmid' exista en los nodos para identificar de manera única cada nodo
+        if 'osmid' not in gdf_nodes.columns:
+            raise ErrorShapefile("El archivo de nodos debe tener una columna 'osmid' con identificadores únicos.")
 
-        columnas_requeridas = ['from', 'to']
-        for col in columnas_requeridas:
-            if col not in gdf_aristas.columns:
-                raise ErrorShapefile(f"El shapefile de aristas debe incluir la columna '{col}'.")
+        # Establece 'osmid' como índice para facilitar la asociación de datos
+        gdf_nodes.set_index('osmid', inplace=True)
 
-        if 'key' not in gdf_aristas.columns:
-            gdf_aristas['key'] = 0
-        if 'oneway' not in gdf_aristas.columns:
-            gdf_aristas['oneway'] = 0  # Se asume que las calles son de doble sentido
+        # Verifica que las columnas 'from' y 'to' existan en las aristas para definir conexiones entre nodos
+        if 'from' not in gdf_edges.columns or 'to' not in gdf_edges.columns:
+            raise ErrorShapefile("El archivo de aristas debe tener columnas 'from' y 'to' con los identificadores de nodos.")
 
-        edges_extra = []
-        for idx, row in gdf_aristas.iterrows():
-            if row['oneway'] == 0:
-                reverse_row = copy.deepcopy(row)
-                reverse_row['from'], reverse_row['to'] = row['to'], row['from']
-                edges_extra.append(reverse_row)
-        if edges_extra:
-            import pandas as pd
-            df_extra = pd.DataFrame(edges_extra, columns=gdf_aristas.columns)
-            gdf_extra = gpd.GeoDataFrame(df_extra, geometry=gdf_aristas.geometry.name, crs=gdf_aristas.crs)
-            gdf_aristas = pd.concat([gdf_aristas, gdf_extra], ignore_index=True)
-
-        gdf_aristas.set_index(['from', 'to', 'key'], inplace=True)
+        # Asegura que cada arista tenga una clave única para evitar duplicados en la gráfica
+        if 'key' not in gdf_edges.columns:
+            gdf_edges['key'] = 0
+        gdf_edges.set_index(['from', 'to', 'key'], inplace=True)
 
         try:
-            grafica = ox.graph_from_gdfs(gdf_nodos, gdf_aristas)
+            # Crea la gráfica a partir de los GeoDataFrames de nodos y aristas utilizando OSMNX
+            grafica = ox.graph_from_gdfs(gdf_nodes, gdf_edges)
         except Exception as e:
-            raise ErrorRedVial(f"Error al crear la red vial: {e}")
+            raise ErrorRedVial(f"Error al crear la gráfica desde los GeoDataFrames: {e}")
 
         return grafica
 
     def _asignar_pesos_aristas(self) -> None:
         """
-        Asigna a cada arista de la red vial un peso basado en su longitud.
-        
-        Utiliza el valor contenido en la columna 'length' y asigna el valor 1.0 en caso de que dicha columna no exista.
-        """
-        for _, _, datos in self.grafica.edges(data=True):
-            datos['weight'] = datos.get('length', 1.0)
+        Asigna pesos a las aristas de la gráfica basándose en la longitud de cada arista.
 
-    def _calcular_matriz_distancias(self, nodos: List[int]) -> Dict[int, Dict[int, Union[float, int]]]:
+        Recorre todas las aristas de la gráfica y actualiza el atributo 'weight' con la longitud 
+        de la arista, lo cual permite que el algoritmo genético utilice estos pesos para 
+        calcular las distancias en la resolución del TSP.
         """
-        Calcula la matriz de distancias entre todos los pares de nodos especificados, usando el algoritmo de Dijkstra.
-        
-        Construye un diccionario anidado en el que, para cada nodo, se asigna la distancia mínima
-        hacia cada otro nodo, usando la longitud de las aristas como peso.
-        
-        :param nodos: Lista de identificadores de nodos a considerar.
-        :devuelve: Matriz de distancias en forma de diccionario anidado.
-        :raises ErrorRedVial: Si ocurre algún error durante el cálculo de las distancias.
+        for _, _, data in self.grafica.edges(data=True):
+            data['weight'] = data.get('length', 1.0)
+
+    def _verificar_conectividad(self) -> None:
         """
-        matriz = {}
+        Verifica si la gráfica es fuertemente conectada. Si no lo es, agrega aristas con pesos altos 
+        para unir componentes desconectados, garantizando que exista al menos un camino entre cualquier 
+        par de nodos.
+
+        :raises ErrorRedVial: Si ocurre un error durante la verificación o modificación de la conectividad.
+        """
+        try:
+            if not nx.is_strongly_connected(self.grafica):
+                componentes = list(nx.strongly_connected_components(self.grafica))
+                for i in range(len(componentes) - 1):
+                    nodo1 = list(componentes[i])[0]
+                    nodo2 = list(componentes[i + 1])[0]
+                    # Añade una arista con un peso muy elevado para forzar la conexión entre componentes
+                    self.grafica.add_edge(nodo1, nodo2, length=1e5, weight=1e5)
+        except Exception as e:
+            raise ErrorRedVial(f"Error al verificar o corregir la conectividad de la gráfica: {e}")
+
+    def _calcular_matriz_distancias(
+            self, 
+            nodos: List[int]
+    ) -> Dict[int, Dict[int, Union[float, int]]]:
+        """
+        Calcula la matriz de distancias entre todos los pares de nodos utilizando la longitud de 
+        los caminos más cortos (basados en Dijkstra).
+
+        :param nodos: Lista de nodos para los cuales se calcularán las distancias entre todos los pares.
+        :type nodos: List[int]
+        :return: Diccionario anidado que representa la matriz de distancias, donde las claves 
+                 son nodos y los valores son diccionarios de nodos con sus respectivas distancias.
+        :rtype: Dict[int, Dict[int, Union[float, int]]]
+        :raises ErrorRedVial: Si ocurre un error durante el cálculo de las distancias.
+        """
+        matriz_distancias: Dict[int, Dict[int, Union[float, int]]] = {}
         try:
             for nodo_i in nodos:
-                matriz[nodo_i] = {}
-                distancias_origen = nx.single_source_dijkstra_path_length(self.grafica, nodo_i, weight='length')
+                matriz_distancias[nodo_i] = {}
+                # Calcula las distancias desde nodo_i a todos los demás nodos utilizando Dijkstra
+                longitudes = nx.single_source_dijkstra_path_length(
+                    self.grafica,
+                    nodo_i,
+                    weight='length'
+                )
                 for nodo_j in nodos:
                     if nodo_i != nodo_j:
-                        matriz[nodo_i][nodo_j] = distancias_origen.get(nodo_j, np.inf)
+                        distancia = longitudes.get(nodo_j, np.inf)
+                        matriz_distancias[nodo_i][nodo_j] = distancia
                     else:
-                        matriz[nodo_i][nodo_j] = 0.0
+                        matriz_distancias[nodo_i][nodo_j] = 0.0
         except Exception as e:
             raise ErrorRedVial(f"Error al calcular la matriz de distancias: {e}")
-        return matriz
+        return matriz_distancias
 
     def _crear_poblacion(self, nodos: List[int]) -> List[List[int]]:
         """
-        Genera la población inicial para el algoritmo genético, produciendo ciclos que inician y terminan
-        en el mismo nodo. Cada individuo es una aproximación a un ciclo hamiltoniano
-        que incluye todos los nodos especificados.
-        
-        :param nodos: Lista de identificadores de nodos que deben visitarse.
-        :devuelve: Lista de individuos (ciclos).
+        Crea la población inicial de rutas posibles para el algoritmo genético del TSP.
+
+        Cada individuo en la población es una permutación aleatoria de los nodos, representando 
+        una posible ruta que visita cada nodo una sola vez.
+
+        :param nodos: Lista de nodos que conforman la ruta a optimizar.
+        :type nodos: List[int]
+        :return: Lista de individuos, donde cada individuo es una lista de nodos en un orden específico.
+        :rtype: List[List[int]]
         """
-        poblacion = []
-        for _ in range(self.tamano_poblacion):
-            # Selecciona aleatoriamente un nodo de inicio
-            nodo_inicial = random.choice(nodos)
-            
-            # Genera una permutación de los restantes
-            restantes = [n for n in nodos if n != nodo_inicial]
-            perm_restantes = random.sample(restantes, len(restantes))
-            
-            # Forma el ciclo => [nodo_inicial, ..., otros..., nodo_inicial]
-            individuo = [nodo_inicial] + perm_restantes + [nodo_inicial]
-            poblacion.append(individuo)
-        return poblacion
+        return [random.sample(nodos, len(nodos)) for _ in range(self.tamano_poblacion)]
 
-    def _calcular_fitness(self, individuo: List[int], matriz: Dict[int, Dict[int, Union[float, int]]]) -> float:
+    def _calcular_fitness(
+            self, 
+            individuo: List[int], 
+            matriz_distancias: Dict[int, Dict[int, Union[float, int]]]
+    ) -> float:
         """
-        Calcula la medida de fitness de un individuo que representa un ciclo. Se evalúa
-        si se incluyen todos los nodos sin repetirlos (aparte del retorno al inicial),
-        y se calcula la distancia total. Se penaliza fuertemente la imposibilidad de enlazar
-        nodos consecutivos o la repetición indebida de nodos.
-        
-        :param individuo: Ciclo representado como lista de nodos (el primero y el último son el mismo).
-        :param matriz: Matriz de distancias entre nodos.
-        :devuelve: Valor de fitness (mientras más bajo, mejor). Se asigna un valor alto si la ruta es inviable.
+        Calcula la aptitud (fitness) de un individuo basado en la distancia total de la ruta 
+        que representa.
+
+        La aptitud se define como la suma de las distancias entre nodos consecutivos en la ruta. 
+        Cuanto menor sea la distancia total, mayor será la aptitud.
+
+        :param individuo: Ruta representada como una lista de nodos en orden.
+        :type individuo: List[int]
+        :param matriz_distancias: Matriz de distancias entre nodos, previamente calculada.
+        :type matriz_distancias: Dict[int, Dict[int, Union[float, int]]]
+        :return: Suma total de las distancias entre nodos consecutivos en la ruta.
+        :rtype: float
         """
-        distancia_total = 0.0
-        visitados_unicos = set()
+        return sum(
+            matriz_distancias[individuo[i]][individuo[i + 1]]
+            for i in range(len(individuo) - 1)
+        )
 
-        for i in range(len(individuo) - 1):
-            ni = individuo[i]
-            nj = individuo[i + 1]
-
-            # Ignora la repetición entre el primero y el último que cierran el ciclo
-            if i < len(individuo) - 2:  
-                # Se excluye el último para no contar la igualdad (primer==último)
-                if ni in visitados_unicos:
-                    return 1e12
-                visitados_unicos.add(ni)
-
-            dist = matriz[ni].get(nj, np.inf)
-            if np.isinf(dist):
-                return 1e12
-
-            distancia_total += dist
-
-        if len(visitados_unicos) < (len(individuo) - 1):
-            return 1e12
-
-        return distancia_total
-
-    def _seleccionar(self, poblacion: List[List[int]], aptitudes: List[float], cantidad: int) -> List[List[int]]:
+    def _seleccion(
+            self, 
+            poblacion: List[List[int]], 
+            puntuaciones_aptitud: List[float], 
+            cantidad_a_seleccionar: int
+    ) -> List[List[int]]:
         """
-        Selecciona los mejores individuos de la población según su fitness (menor es mejor).
-        
-        :param poblacion: Lista de individuos.
-        :param aptitudes: Lista de valores de fitness asociados a cada individuo.
-        :param cantidad: Número de individuos a seleccionar.
-        :devuelve: Lista de individuos seleccionados.
+        Selecciona a los mejores individuos de la población según su aptitud, ordenando de menor 
+        a mayor la distancia total (menor distancia es mejor).
+
+        :param poblacion: Lista de individuos presentes en la población actual.
+        :type poblacion: List[List[int]]
+        :param puntuaciones_aptitud: Lista de puntuaciones de aptitud (distancias totales) para cada individuo.
+        :type puntuaciones_aptitud: List[float]
+        :param cantidad_a_seleccionar: Número de individuos que serán seleccionados para la siguiente generación.
+        :type cantidad_a_seleccionar: int
+        :return: Lista de individuos seleccionados basándose en la aptitud.
+        :rtype: List[List[int]]
         """
-        combinacion = list(zip(poblacion, aptitudes))
+        # Combina la población con sus respectivas puntuaciones de aptitud
+        combinacion = list(zip(poblacion, puntuaciones_aptitud))
+        # Ordena la combinación de manera ascendente según el fitness (menor distancia primero)
         combinacion_ordenada = sorted(combinacion, key=lambda x: x[1])
-        return [ind for ind, _ in combinacion_ordenada[:cantidad]]
+        # Extrae los individuos con los mejores fitness
+        seleccionados = [ind for ind, _ in combinacion_ordenada[:cantidad_a_seleccionar]]
+        return seleccionados
 
-    def _cruzar(self, padre1: List[int], padre2: List[int]) -> List[int]:
+    def _cruce(
+            self, 
+            padre1: List[int], 
+            padre2: List[int]
+    ) -> List[int]:
         """
-        Realiza el cruce entre dos individuos (ciclos) mediante el intercambio aleatorio de un segmento.
-        
-        Copia un segmento del primer padre y completa los nodos faltantes con el orden del segundo padre.
-        
-        :param padre1: Primer individuo (lista de nodos, ciclo).
-        :param padre2: Segundo individuo (lista de nodos, ciclo).
-        :devuelve: Nuevo individuo (hijo) resultante del cruce, conservando la idea de ciclo.
+        Realiza el cruce (crossover) entre dos individuos padre para generar un nuevo individuo 
+        hijo que sea válido en el contexto del TSP (una permutación sin repeticiones).
+
+        Utiliza un método de intercambio de segmentos para combinar partes de ambos padres, 
+        asegurando que el hijo resultante sea una permutación válida de los nodos.
+
+        :param padre1: Primer padre, representado como una lista de nodos en orden.
+        :type padre1: List[int]
+        :param padre2: Segundo padre, representado como una lista de nodos en orden.
+        :type padre2: List[int]
+        :return: Hijo resultante del cruce entre los dos padres.
+        :rtype: List[int]
         """
-        base1 = padre1[:-1]  # Sin repetir el último
-        base2 = padre2[:-1]
+        tamano = len(padre1)
+        inicio, fin = sorted(random.sample(range(tamano), 2))  # Selecciona dos puntos de corte aleatorios
+        hijo = [None] * tamano
 
-        tamano = len(base1)
-        inicio, fin = sorted(random.sample(range(tamano), 2))
-        hijo_parcial = [None] * tamano
+        # Copia una subsección del primer padre al hijo
+        hijo[inicio:fin] = padre1[inicio:fin]
 
-        # Copia el segmento [inicio:fin] de base1
-        hijo_parcial[inicio:fin] = base1[inicio:fin]
-
-        # Completa con el orden del segundo padre
+        # Completa los nodos restantes en el orden en que aparecen en el segundo padre
         indice = fin
-        for nodo in base2:
-            if nodo not in hijo_parcial:
+        for nodo in padre2:
+            if nodo not in hijo:
                 if indice >= tamano:
                     indice = 0
-                hijo_parcial[indice] = nodo
+                hijo[indice] = nodo
                 indice += 1
 
-        # Reconstruye el ciclo agregando al final el mismo nodo que al inicio
-        hijo = hijo_parcial + [hijo_parcial[0]]
         return hijo
 
-    def _mutar(self, individuo: List[int]) -> List[int]:
+    def _mutar(
+            self, 
+            individuo: List[int]
+    ) -> List[int]:
         """
-        Aplica mutación a un individuo, intercambiando aleatoriamente dos nodos
-        según la tasa de mutación establecida. Mantiene la estructura de ciclo.
-        
-        :param individuo: Lista de nodos que representa el ciclo.
-        :devuelve: Nuevo individuo tras aplicar la mutación.
-        """
-        ciclo_base = individuo[:-1]
-        for i in range(len(ciclo_base)):
-            if random.random() < self.tasa_mutacion:
-                j = random.randint(0, len(ciclo_base) - 1)
-                ciclo_base[i], ciclo_base[j] = ciclo_base[j], ciclo_base[i]
-        nuevo = ciclo_base + [ciclo_base[0]]
-        return nuevo
+        Aplica mutaciones al individuo intercambiando pares de nodos con cierta probabilidad, 
+        introduciendo variabilidad genética en la población.
 
-    def _evolucionar_poblacion(self, poblacion: List[List[int]], matriz: Dict[int, Dict[int, Union[float, int]]]) -> List[List[int]]:
+        :param individuo: Ruta representada como una lista de nodos en orden.
+        :type individuo: List[int]
+        :return: Individuo mutado con posibles cambios en el orden de los nodos.
+        :rtype: List[int]
         """
-        Evoluciona la población mediante selección, cruce, mutación y elitismo.
-        
-        Se calculan los fitness, se selecciona una parte de la población y se genera
-        nueva población hasta completar el número original, preservando la élite.
-        
-        :param poblacion: Población actual (lista de ciclos).
-        :param matriz: Matriz de distancias.
-        :devuelve: Nueva población evolucionada.
+        for i in range(len(individuo)):
+            if random.random() < self.tasa_mutacion:
+                j = random.randint(0, len(individuo) - 1)
+                # Intercambia el nodo actual con otro nodo aleatorio
+                individuo[i], individuo[j] = individuo[j], individuo[i]
+        return individuo
+
+    def _evolucionar_poblacion(
+            self, 
+            poblacion: List[List[int]], 
+            matriz_distancias: Dict[int, Dict[int, Union[float, int]]]
+    ) -> List[List[int]]:
         """
-        aptitudes = [self._calcular_fitness(ind, matriz) for ind in poblacion]
-        numero_elite = max(1, int(self.tamano_elite * len(poblacion)))
-        elite = self._seleccionar(poblacion, aptitudes, numero_elite)
-        seleccionados = self._seleccionar(poblacion, aptitudes, len(poblacion) // 2)
+        Evoluciona la población mediante los operadores de selección, cruce, mutación y elitismo, 
+        creando así la nueva generación.
+
+        En primer lugar, se calcula la aptitud de cada individuo en la población. Luego:
+         1. Se seleccionan los individuos de élite (un porcentaje de los mejores).
+         2. Se selecciona un subconjunto más amplio de la población (por ejemplo, el 50% superior) 
+            del cual se extraen parejas para cruzar.
+         3. Se generan nuevos individuos por cruce y se aplican mutaciones.
+         4. Se reincorporan los individuos de élite directamente a la nueva población.
+         5. La nueva población mantiene el tamaño original.
+
+        :param poblacion: Población actual de individuos (rutas).
+        :type poblacion: List[List[int]]
+        :param matriz_distancias: Matriz de distancias entre nodos para el cálculo de aptitud.
+        :type matriz_distancias: Dict[int, Dict[int, Union[float, int]]]
+        :return: Nueva población evolucionada tras aplicar selección, cruce, mutación y elitismo.
+        :rtype: List[List[int]]
+        """
+        # Calcula la aptitud para cada individuo
+        puntuaciones_aptitud = [self._calcular_fitness(ind, matriz_distancias) for ind in poblacion]
+
+        # Determina el número de individuos élite que se preservarán en la siguiente generación
+        numero_elite = max(1, int(self.proporcion_elite * len(poblacion)))
+
+        # Selecciona a los mejores individuos élite
+        elite = self._seleccion(poblacion, puntuaciones_aptitud, numero_elite)
+
+        # Selecciona el 50% superior de la población para la reproducción (cruce)
+        seleccionados = self._seleccion(poblacion, puntuaciones_aptitud, len(poblacion) // 2)
+
+        # Genera la nueva población (sin contar a la élite)
         nueva_poblacion = []
         while len(nueva_poblacion) < (len(poblacion) - len(elite)):
             padre1, padre2 = random.sample(seleccionados, 2)
-            hijo = self._mutar(self._cruzar(padre1, padre2))
+            hijo = self._mutar(self._cruce(padre1, padre2))
             nueva_poblacion.append(hijo)
+
+        # Añade los individuos de élite a la nueva población
         nueva_poblacion += elite
+
         return nueva_poblacion
 
-    def _calcular_ruta_completa_fuertemente_conexa(self, mejor_ruta: List[int]) -> List[int]:
+    def _calcular_ruta_completa(
+            self, 
+            mejor_ruta: List[int]
+    ) -> List[int]:
         """
-        Construye la ruta completa a partir del individuo óptimo para redes fuertemente conexas.
-        
-        El individuo ya representa un ciclo (mismo primer y último nodo), pero se verifica la
-        conexión entre nodos consecutivos. Si no existe un enlace directo, se calcula la
-        ruta más corta mediante nx.shortest_path. Si algún nodo intermedio ya fue visitado,
-        se opta por la conexión directa para evitar duplicados.
-        
-        :param mejor_ruta: Lista de nodos ordenada de la solución óptima (ciclo).
-        :devuelve: Lista de nodos que conforman la ruta completa (ciclo expandido).
-        :raises ErrorRedVial: Si no existe ruta entre dos nodos consecutivos.
+        Construye la ruta completa incluyendo los caminos más cortos entre nodos consecutivos 
+        de la mejor ruta encontrada.
+
+        Para cada par consecutivo de nodos en la mejor ruta, se obtienen los nodos intermedios que 
+        conforman el trayecto más corto en la red vial, uniéndolos en un solo recorrido continuo.
+
+        :param mejor_ruta: Ruta base (individuo) encontrada por el algoritmo genético como la mejor solución.
+        :type mejor_ruta: List[int]
+        :return: Ruta completa que incluye los nodos intermedios en cada segmento.
+        :rtype: List[int]
+        :raises ErrorRedVial: Si no se puede encontrar un camino entre dos nodos consecutivos.
         """
         ruta_completa = []
         for i in range(len(mejor_ruta) - 1):
             origen = mejor_ruta[i]
             destino = mejor_ruta[i + 1]
-            if self.grafica.has_edge(origen, destino):
-                subruta = [origen, destino]
-            else:
-                try:
-                    subruta = nx.shortest_path(self.grafica, origen, destino, weight='length')
-                except nx.NetworkXNoPath:
-                    raise ErrorRedVial(f"No existe ruta entre {origen} y {destino}")
-                if any(n in ruta_completa for n in subruta[1:-1]):
-                    subruta = [origen, destino]
-            if not ruta_completa:
-                ruta_completa.extend(subruta)
-            else:
-                if ruta_completa[-1] == subruta[0]:
-                    ruta_completa.extend(subruta[1:])
-                else:
-                    ruta_completa.extend(subruta)
+            try:
+                subruta = nx.shortest_path(
+                    self.grafica,
+                    origen,
+                    destino,
+                    weight='length'
+                )
+                # Extiende la ruta agregando todos los nodos intermedios salvo el último 
+                # (para no duplicar el destino)
+                ruta_completa.extend(subruta[:-1])
+            except nx.NetworkXNoPath:
+                raise ErrorRedVial(f"No hay ruta entre los nodos {origen} y {destino}")
+        ruta_completa.append(mejor_ruta[-1])  # Añade el último nodo al final de la ruta
         return ruta_completa
 
-    def _calcular_ruta_completa_scc(self, mejor_ruta: List[int]) -> List[int]:
+    def _calcular_distancia_total(
+            self, 
+            ruta_completa: List[int]
+    ) -> float:
         """
-        Construye la ruta completa a partir del individuo óptimo en redes con múltiples SCC.
-        
-        Para cada par de nodos consecutivos se calcula la subruta con nx.shortest_path,
-        filtrando nodos intermedios ya visitados. Se emplea un conjunto de nodos ya visitados
-        para evitar repeticiones, manteniendo siempre el origen y destino.
-        
-        :param mejor_ruta: Lista de nodos que representa la solución óptima en el SCC (ciclo).
-        :devuelve: Lista de nodos que conforman la ruta completa en el SCC.
-        :raises ErrorRedVial: Si no existe un camino entre dos nodos consecutivos.
-        """
-        ruta_completa = []
-        visitados = set()
-        for i in range(len(mejor_ruta) - 1):
-            origen = mejor_ruta[i]
-            destino = mejor_ruta[i + 1]
-            if self.grafica.has_edge(origen, destino):
-                subruta = [origen, destino]
-            else:
-                try:
-                    subruta = nx.shortest_path(self.grafica, origen, destino, weight='length')
-                except nx.NetworkXNoPath:
-                    raise ErrorRedVial(f"No existe ruta entre {origen} y {destino}")
-            nueva_subruta = []
-            for idx, nodo in enumerate(subruta):
-                if idx == 0 or idx == len(subruta) - 1:
-                    nueva_subruta.append(nodo)
-                else:
-                    if nodo not in visitados:
-                        nueva_subruta.append(nodo)
-            if not ruta_completa:
-                ruta_completa.extend(nueva_subruta)
-            else:
-                if ruta_completa[-1] == nueva_subruta[0]:
-                    ruta_completa.extend(nueva_subruta[1:])
-                else:
-                    ruta_completa.extend(nueva_subruta)
-            for nodo in nueva_subruta:
-                visitados.add(nodo)
-        return ruta_completa
+        Calcula la distancia total de la ruta completa, sumando las longitudes de todas las aristas 
+        que la componen.
 
-    def _calcular_distancia_total(self, ruta_completa: List[int]) -> float:
-        """
-        Calcula la distancia total de la ruta, sumando la longitud de cada arista utilizada.
-        
-        Se recorre la secuencia de nodos y, para cada par consecutivo, se obtiene el valor
-        de la columna 'length' de la arista.
-        
         :param ruta_completa: Lista de nodos que conforman la ruta completa.
-        :devuelve: Distancia total en metros.
+        :type ruta_completa: List[int]
+        :return: Distancia total de la ruta en metros.
+        :rtype: float
         """
         distancia_total = 0.0
         for i in range(len(ruta_completa) - 1):
@@ -1979,29 +1662,29 @@ class ResolverTSP:
             nodo_destino = ruta_completa[i + 1]
             if self.grafica.has_edge(nodo_inicio, nodo_destino):
                 datos_arista = self.grafica.get_edge_data(nodo_inicio, nodo_destino)
-                llave = list(datos_arista.keys())[0]
-                distancia_total += datos_arista[llave].get('length', 1.0)
+                # Selecciona la primera arista si existen múltiples entre los nodos
+                arista_key = list(datos_arista.keys())[0]
+                distancia_total += datos_arista[arista_key].get('length', 1.0)
         return distancia_total
 
-    def _graficar_ruta(self, ruta_completa: List[int]) -> None:
+    def _graficar_ruta(
+            self, 
+            ruta_completa: List[int]
+    ) -> None:
         """
-        Visualiza la ruta completa sobre la red vial empleando OSMNX y Matplotlib.
-        
-        Ajusta el tamaño de los nodos con base en la cantidad de visitas (apariciones) en la ruta.
-        
+        Genera una representación visual de la ruta completa sobre la red vial, utilizando 
+        las herramientas de OSMNX y Matplotlib.
+
         :param ruta_completa: Lista de nodos que conforman la ruta completa.
-        :raises ErrorRedVial: Si ocurre algún error durante la visualización.
+        :type ruta_completa: List[int]
+        :raises ErrorRedVial: Si ocurre un error durante la generación de la visualización.
         """
-        from matplotlib import pyplot as plt
-        conteo = Counter(ruta_completa)
-        tamanio_nodos = [10 * conteo.get(nodo, 0) for nodo in self.grafica.nodes()]
         try:
             fig, ax = ox.plot_graph_route(
                 self.grafica,
                 ruta_completa,
                 route_linewidth=6,
-                node_size=tamanio_nodos,
-                node_color='blue',
+                node_size=10,
                 bgcolor='white',
                 edge_color='gray',
                 edge_linewidth=0.5
@@ -2010,295 +1693,84 @@ class ResolverTSP:
         except Exception as e:
             raise ErrorRedVial(f"Error al graficar la ruta: {e}")
 
-    def _resolver_MTSP_fuertemente_conexa(self) -> None:
+    # -------------------------------------------------------------------------
+    # Métodos públicos
+    # -------------------------------------------------------------------------
+
+    def resolver_y_mostrar_tsp(self) -> None:
         """
-        Soluciona el TSP para redes fuertemente conexas por medio de un algoritmo genético,
-        buscando ciclos hamiltonianos (o aproximaciones) que visiten cada nodo una sola vez.
-        
-        Asigna los pesos a las aristas, calcula la matriz de distancias, genera la población inicial
-        y la evoluciona durante un número determinado de generaciones. Finalmente, selecciona el mejor
-        individuo, construye la ruta completa y presenta la distancia total.
+        Resuelve el Problema del Viajante (TSP) utilizando un algoritmo genético con elitismo 
+        y muestra la mejor ruta encontrada sobre la red vial.
+
+        Pasos que realiza este método:
+         1. Asigna pesos a las aristas basados en la longitud.
+         2. Verifica y ajusta la conectividad de la red para asegurar la existencia de caminos 
+            entre todos los nodos.
+         3. Calcula la matriz de distancias utilizando el algoritmo de Dijkstra.
+         4. Crea una población inicial de rutas (individuos).
+         5. Evoluciona la población a lo largo de varias generaciones mediante los operadores de 
+            selección, cruce, mutación y elitismo.
+         6. Identifica la mejor ruta (individuo) y reconstruye el recorrido completo con los 
+            caminos más cortos entre nodos consecutivos.
+         7. Calcula la distancia total recorrida.
+         8. Imprime por consola el resultado de la optimización y grafica la ruta para su 
+            visualización.
+
+        :raises ErrorRedVial: Si ocurre un error en la preparación de la red, en el cálculo 
+                              de distancias o en la construcción de la ruta completa.
         """
+        print('Resolviendo el problema del viajante (TSP) con un algoritmo genético elitista...')
+
+        # Asigna pesos y verifica conectividad
         try:
             self._asignar_pesos_aristas()
+            self._verificar_conectividad()
         except ErrorRedVial as e:
-            raise ErrorRedVial(f"Error durante la asignación de pesos: {e}")
+            raise ErrorRedVial(f"Error durante la preparación del TSP: {e}")
 
+        # Obtiene la lista de nodos y calcula la matriz de distancias
         nodos = list(self.grafica.nodes)
         try:
-            matriz = self._calcular_matriz_distancias(nodos)
+            matriz_distancias = self._calcular_matriz_distancias(nodos)
         except ErrorRedVial as e:
             raise ErrorRedVial(f"Error al calcular la matriz de distancias: {e}")
 
+        # Genera la población inicial
         try:
             poblacion = self._crear_poblacion(nodos)
         except Exception as e:
             raise ErrorRedVial(f"Error al crear la población inicial: {e}")
 
+        # Evoluciona la población a través de las generaciones
+        ancho_barra = 80
         try:
-            for _ in tqdm(range(self.generaciones), desc="Generaciones", ncols=80):
-                poblacion = self._evolucionar_poblacion(poblacion, matriz)
+            for _ in tqdm(range(self.generaciones), desc="Generaciones", ncols=ancho_barra):
+                poblacion = self._evolucionar_poblacion(poblacion, matriz_distancias)
         except Exception as e:
             raise ErrorRedVial(f"Error durante la evolución de la población: {e}")
 
+        # Identifica el mejor individuo y calcula la ruta completa
         try:
-            mejor_individuo = min(poblacion, key=lambda ind: self._calcular_fitness(ind, matriz))
-            ruta_completa = self._calcular_ruta_completa_fuertemente_conexa(mejor_individuo)
-            dist_total = self._calcular_distancia_total(ruta_completa)
-            dist_total_km = dist_total / 1000.0
-            self.ruta_completa = ruta_completa
+            mejor_individuo = min(
+                poblacion,
+                key=lambda ind: self._calcular_fitness(ind, matriz_distancias)
+            )
+            ruta_completa = self._calcular_ruta_completa(mejor_individuo)
+            distancia_total = self._calcular_distancia_total(ruta_completa)
+            distancia_total_km = distancia_total / 1000.0  # Convierte a kilómetros
         except ErrorRedVial as e:
             raise ErrorRedVial(f"Error al construir la ruta completa: {e}")
         except Exception as e:
             raise ErrorRedVial(f"Error al calcular la distancia total: {e}")
 
-        print(f"\nMejor ciclo encontrado (orden de nodos):\n{mejor_individuo}")
-        print(f"Distancia total: {dist_total_km:,.2f} km")
+        # Muestra los resultados obtenidos
+        print(f"\nMejor ruta encontrada (orden de nodos):\n{mejor_individuo}")
+        print(f"Ruta completa (incluye nodos intermedios):\n{ruta_completa}")
+        print(f"Distancia total: {distancia_total_km:,.2f} km")
 
+        # Genera una representación gráfica de la ruta
         try:
+            print("\nGenerando la gráfica de la ruta, por favor espere...")
             self._graficar_ruta(ruta_completa)
         except ErrorRedVial as e:
             print(f"[Error] {e}")
-
-    def _resolver_MTSP_SCC(self) -> None:
-        """
-        Soluciona el TSP para redes compuestas por múltiples componentes fuertemente conexas (SCC).
-        
-        Asigna los pesos a las aristas y calcula la matriz de distancias global. Para cada SCC,
-        halla un ciclo interno (o aproximación) mediante el algoritmo genético. Luego, ensambla
-        dichas soluciones en una o varias rutas finales, mostrando su distancia total.
-        """
-        try:
-            self._asignar_pesos_aristas()
-        except ErrorRedVial as e:
-            raise ErrorRedVial(f"Error al asignar pesos: {e}")
-
-        nodos_totales = list(self.grafica.nodes())
-        matriz_global = self._calcular_matriz_distancias(nodos_totales)
-        scc_lista = list(nx.strongly_connected_components(self.grafica))
-        print(f"La red contiene {len(scc_lista)} componentes fuertemente conexas.")
-
-        soluciones_scc = []
-        for idx, scc in enumerate(scc_lista, start=1):
-            nodos_scc = list(scc)
-            if len(nodos_scc) == 1:
-                soluciones_scc.append({'ruta': nodos_scc + nodos_scc, 'nodos': nodos_scc})
-                continue
-
-            print(f"Procesando SCC {idx} con {len(nodos_scc)} nodos...")
-            submatriz = {ni: {nj: matriz_global[ni][nj] for nj in nodos_scc} for ni in nodos_scc}
-            poblacion_scc = self._crear_poblacion(nodos_scc)
-
-            for _ in tqdm(range(self.generaciones), desc=f"Generaciones en SCC {idx}", ncols=80):
-                poblacion_scc = self._evolucionar_poblacion(poblacion_scc, submatriz)
-
-            mejor_scc = min(poblacion_scc, key=lambda ind: self._calcular_fitness(ind, submatriz))
-            soluciones_scc.append({'ruta': mejor_scc, 'nodos': nodos_scc})
-
-        # Se concatenan los ciclos de cada SCC
-        indices_restantes = set(range(len(soluciones_scc)))
-        rutas_finales = []
-        while indices_restantes:
-            actual_idx = indices_restantes.pop()
-            ruta_actual = list(soluciones_scc[actual_idx]['ruta'])
-            extendido = True
-            while extendido and indices_restantes:
-                extendido = False
-                mejor_candidato = None
-                mejor_conexion = None
-                menor_longitud = float('inf')
-                nodo_final = ruta_actual[-1]
-                for cand in list(indices_restantes):
-                    nodo_inicio_cand = soluciones_scc[cand]['ruta'][0]
-                    conexion = []
-                    if nx.has_path(self.grafica, nodo_final, nodo_inicio_cand):
-                        try:
-                            conexion = nx.shortest_path(self.grafica, nodo_final, nodo_inicio_cand, weight='length')
-                        except nx.NetworkXNoPath:
-                            conexion = []
-                    if conexion:
-                        if any(n in ruta_actual for n in conexion[1:-1]):
-                            continue
-                        dist_conexion = self._calcular_distancia_total(conexion)
-                        if dist_conexion < menor_longitud:
-                            menor_longitud = dist_conexion
-                            mejor_candidato = cand
-                            mejor_conexion = conexion
-                if mejor_candidato is not None:
-                    if ruta_actual[-1] == mejor_conexion[0]:
-                        ruta_actual.extend(mejor_conexion[1:])
-                    else:
-                        ruta_actual.extend(mejor_conexion)
-                    ruta_cand = soluciones_scc[mejor_candidato]['ruta']
-                    if ruta_actual[-1] == ruta_cand[0]:
-                        ruta_actual.extend(ruta_cand[1:])
-                    else:
-                        ruta_actual.extend(ruta_cand)
-                    indices_restantes.remove(mejor_candidato)
-                    extendido = True
-            rutas_finales.append(ruta_actual)
-        
-        # Se grafican y presentan los resultados de cada ruta generada
-        for idx, ruta in enumerate(rutas_finales, start=1):
-            distancia = self._calcular_distancia_total(ruta) / 1000.0
-            print(f"\n[Resultados - Ruta {idx} en SCC]:")
-            print(f"Número de nodos en la ruta: {len(ruta)}")
-            print(f"Distancia: {distancia:,.2f} km")
-            try:
-                self._graficar_ruta(ruta)
-            except ErrorRedVial as e:
-                print(f"[Error al graficar SCC {idx}] {e}")
-
-        self.ruta_completa = rutas_finales
-
-    # -------------------------------------------------------------------------
-    # Métodos públicos
-    # -------------------------------------------------------------------------
-    def resolver_MTSP(self) -> None:
-        """
-        Determina de manera automática si la red vial es fuertemente conexa o no, y
-        aplica la estrategia apropiada para resolver el problema TSP.
-        
-        Si la red es fuertemente conexa, aplica la estrategia de búsqueda de un ciclo
-        hamiltoniano que visite todos los nodos; de lo contrario, aplica el método
-        para redes con múltiples SCC.
-        """
-        if nx.is_strongly_connected(self.grafica):
-            print("La red es fuertemente conexa.")
-            self._resolver_MTSP_fuertemente_conexa()
-        else:
-            print("La red no es fuertemente conexa.")
-            self._resolver_MTSP_SCC()
-
-    def exportar_ruta_shapefiles(self, salida_nodos: str, salida_aristas: str) -> None:
-        """
-        Exporta la(s) ruta(s) generada(s) a dos shapefiles (nodos y aristas), renumerando de forma secuencial los nodos.
-        
-        Para redes fuertemente conexas, reconstruye la secuencia de aristas usando las subrutas reales,
-        evitando la duplicación de nodos intermedios. Para varias SCC, emplea la ruta tal cual fue calculada,
-        de modo que la suma de las longitudes en la tabla de atributos coincida con la distancia total calculada.
-        
-        :param salida_nodos: Ruta de salida para el shapefile de nodos.
-        :param salida_aristas: Ruta de salida para el shapefile de aristas.
-        :raises Exception: Si la ruta no ha sido calculada o si ocurre algún error al procesar la geometría.
-        """
-        import pandas as pd
-        if not hasattr(self, 'ruta_completa'):
-            raise Exception("No se ha calculado la ruta. Ejecute resolver_MTSP() primero.")
-
-        nodos_gdf, _ = ox.graph_to_gdfs(self.grafica)
-        
-        # Verifica si se trata de múltiples SCC (lista de rutas) o de una sola secuencia
-        if (
-            isinstance(self.ruta_completa, list)
-            and len(self.ruta_completa) > 0
-            and isinstance(self.ruta_completa[0], list)
-        ):
-            rutas = self.ruta_completa
-            multiple_scc = True
-        else:
-            rutas = [self.ruta_completa]
-            multiple_scc = False
-        
-        todos_nodos_ruta = set()
-        aristas_ruta = []
-
-        # Recorre cada ruta para reconstruir las aristas
-        for ruta in rutas:
-            if len(ruta) < 2:
-                continue
-            for i in range(len(ruta) - 1):
-                u = ruta[i]
-                v = ruta[i+1]
-                if u not in self.grafica.nodes or v not in self.grafica.nodes:
-                    print(f"[Advertencia] Uno de los nodos ({u}, {v}) no se encuentra en la gráfica, se omite.")
-                    continue
-
-                if multiple_scc:
-                    subruta = [u, v]
-                else:
-                    if self.grafica.has_edge(u, v):
-                        subruta = [u, v]
-                    else:
-                        try:
-                            subruta = list(nx.shortest_path(self.grafica, u, v, weight='length'))
-                        except nx.NetworkXNoPath:
-                            print(f"No se encontró camino entre {u} y {v} en la gráfica.")
-                            continue
-                        if any(n in todos_nodos_ruta for n in subruta[1:-1]):
-                            subruta = [u, v]
-
-                todos_nodos_ruta.update(subruta)
-                for j in range(len(subruta) - 1):
-                    aristas_ruta.append((subruta[j], subruta[j+1]))
-        
-        # Ordena los nodos para renumerarlos
-        nodos_ruta = sorted(list(todos_nodos_ruta))
-        mapeo_nodos = {nodo: nuevo_id for nuevo_id, nodo in enumerate(nodos_ruta, start=1)}
-
-        geom_col = 'geometry'
-        if geom_col not in nodos_gdf.columns:
-            if hasattr(nodos_gdf, '_geometry_column_name'):
-                geom_col = nodos_gdf._geometry_column_name
-            else:
-                raise ValueError("No se encontró la columna 'geometry' en el GeoDataFrame de nodos.")
-        
-        nodos_exportar = []
-        for nodo in nodos_ruta:
-            if nodo in nodos_gdf.index:
-                datos = {
-                    'node_id': mapeo_nodos[nodo],
-                    'osmid': nodo,
-                    'geometry': nodos_gdf.loc[nodo, geom_col]
-                }
-                nodos_exportar.append(datos)
-            else:
-                print(f"[Advertencia] El nodo {nodo} no se encontró en el GeoDataFrame de nodos.")
-        
-        if not nodos_exportar:
-            raise ValueError("No se recolectaron nodos para exportación. Verifique la ruta calculada.")
-        
-        df_nodos = pd.DataFrame(nodos_exportar)
-        if 'geometry' not in df_nodos.columns:
-            raise ValueError("La lista de nodos no contiene la clave 'geometry'.")
-        
-        nodos_gdf_exportar = gpd.GeoDataFrame(df_nodos, geometry='geometry', crs=nodos_gdf.crs)
-        nodos_gdf_exportar.to_file(salida_nodos)
-        
-        aristas_exportar = []
-        for (u, v) in aristas_ruta:
-            if u in mapeo_nodos and v in mapeo_nodos:
-                if self.grafica.has_edge(u, v):
-                    datos_arista = self.grafica.get_edge_data(u, v)
-                    llave = list(datos_arista.keys())[0]
-                    datos = datos_arista[llave]
-                    if 'geometry' in datos and datos['geometry'] is not None:
-                        geom = datos['geometry']
-                    else:
-                        try:
-                            origen_geom = nodos_gdf.loc[u, geom_col]
-                            destino_geom = nodos_gdf.loc[v, geom_col]
-                            geom = LineString([origen_geom, destino_geom])
-                        except KeyError:
-                            print(f"No se encontró geometría para los nodos {u} o {v}, se omite la arista.")
-                            continue
-                    info_arista = {
-                        'u': mapeo_nodos[u],
-                        'v': mapeo_nodos[v],
-                        'length': datos.get('length', None),
-                        'geometry': geom
-                    }
-                    aristas_exportar.append(info_arista)
-                else:
-                    print(f"No se encontró arista directa entre {u} y {v}, se usa 'arista directa'.")
-            else:
-                print(f"Uno de los nodos ({u}, {v}) no está en el mapeo, se omite la arista.")
-        
-        df_aristas = pd.DataFrame(aristas_exportar)
-        if 'geometry' not in df_aristas.columns:
-            raise ValueError("La lista de aristas no contiene la clave 'geometry'.")
-        
-        aristas_gdf_exportar = gpd.GeoDataFrame(df_aristas, geometry='geometry', crs=nodos_gdf.crs)
-        aristas_gdf_exportar.to_file(salida_aristas)
-        
-        print(f"Shapefiles exportados exitosamente: {len(nodos_exportar)} nodos y {len(aristas_exportar)} aristas.")

@@ -1,8 +1,8 @@
 import os
 import json
 import geopandas as gpd
-from flask import Flask, request, jsonify, render_template, redirect, url_for, send_from_directory, session
-from RecolectarBasura import AgrupamientoAGEB, Camion
+from flask import Flask, request, jsonify, render_template, redirect, url_for, send_from_directory, session, flash
+from RecolectarBasura import *
 
 app = Flask(__name__)
 app.secret_key = os.urandom(32)
@@ -210,6 +210,75 @@ def ver_imagen(alcaldia):
     nombre_imagen = f"{alcaldia}_agrupamiento.png"
     return send_from_directory(carpeta_imagenes, nombre_imagen)
 
+@app.route('/exportar_sectores/<alcaldia>', methods=['POST'])
+def exportar_sectores(alcaldia):
+    """
+    Ruta que usa la clase ExportarSectoresAGEB para exportar cada sector en un shapefile independiente.
+    """
+    # Definir las rutas de entrada y salida
+    ruta_agrupamiento = os.path.join(app.root_path, 'temp', 'agrupamiento', f"{alcaldia}_mejor_agrupamiento.json")
+    ruta_shapefile = os.path.join(app.root_path, 'Alcaldías', f"{alcaldia}.shp")
+    directorio_salida = os.path.join(app.root_path, 'temp', 'sectores_exportados', alcaldia)
+    
+    # Verificar que los archivos o directorios existen (opcional)
+    if not os.path.exists(ruta_agrupamiento):
+        return f"No se encontró el archivo JSON de agrupamiento para {alcaldia}", 404
+    if not os.path.exists(ruta_shapefile):
+        return f"No se encontró el shapefile para {alcaldia}", 404
+    
+    # Crear la instancia y ejecutar la exportación
+    try:
+        exportador = ExportarSectoresAGEB(
+            ruta_agrupamiento=ruta_agrupamiento,
+            ruta_shapefile=ruta_shapefile,
+            directorio_salida=directorio_salida
+        )
+        exportador.exportar_sectores()
+        flash("Sectores exportados correctamente.", "success")
+    except Exception as e:
+        return f"Error al exportar sectores: {e}", 500
+
+    # Renderiza un template que informe que la exportación fue exitosa y muestre el botón para procesar calles
+    return render_template('exportacion_exitosa.html', alcaldia=alcaldia)
+
+@app.route('/procesar_calles/<alcaldia>', methods=['POST'])
+def procesar_calles(alcaldia):
+    """
+    Ruta que invoca la clase ProcesadorCalles para recortar la red vial de la Ciudad de México
+    y corregir la conectividad según los sectores.
+    """
+    # Definir rutas de entrada para la red vial (estas rutas pueden variar según su estructura)
+    aristas_cdmx_shp = os.path.join(app.root_path, 'data', 'aristas_cdmx.shp')
+    nodos_cdmx_shp = os.path.join(app.root_path, 'data', 'nodos_cdmx.shp')
+    
+    # Usar los sectores previamente exportados
+    carpeta_sectores = os.path.join(app.root_path, 'temp', 'sectores', alcaldia)
+    
+    # Directorios para guardar los shapefiles recortados y los finales corregidos
+    carpeta_calles = os.path.join(app.root_path, 'temp', 'calles_recortadas', alcaldia)
+    carpeta_nodos = os.path.join(app.root_path, 'temp', 'nodos_recortados', alcaldia)
+    carpeta_salida_calles = os.path.join(app.root_path, 'temp', 'calles_finales', alcaldia)
+    carpeta_salida_nodos = os.path.join(app.root_path, 'temp', 'nodos_finales', alcaldia)
+    
+    # Instanciar la clase ProcesadorCalles
+    try:
+        procesador = ProcesadorCalles(
+            aristas_cdmx_shp=aristas_cdmx_shp,
+            nodos_cdmx_shp=nodos_cdmx_shp,
+            carpeta_sectores=carpeta_sectores,
+            carpeta_calles=carpeta_calles,
+            carpeta_nodos=carpeta_nodos,
+            carpeta_salida_calles=carpeta_salida_calles,
+            carpeta_salida_nodos=carpeta_salida_nodos
+        )
+        # Método para recortar la gráfica según los sectores
+        procesador.recortar_grafica_por_sectores()
+
+    except Exception as e:
+        return f"Error al procesar la red vial: {e}", 500
+
+    flash("La red vial fue procesada correctamente.", "success")
+    return render_template('procesamiento_exitoso.html', alcaldia=alcaldia)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5005)
