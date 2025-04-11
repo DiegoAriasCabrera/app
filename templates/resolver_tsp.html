@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}
+  Procesamiento Exitoso
+{% endblock title %}
+
+{% block content %}
+<div class="message-container">
+  <h2>Procesamiento de la Red Vial Exitoso para {{ alcaldia }}</h2>
+  <p>La red vial ha sido recortada y corregida exitosamente para el sector <strong>{{ sector }}</strong>.</p>
+</div>
+
+<div class="form-container">
+  <h2>Parametros para Resolver el TSP</h2>
+  <!-- Este formulario es similar al inicial de "Sistema de Recolección de Basura",
+       pero puede adaptarse a los parámetros requeridos por la clase ResolverMTSP -->
+  <form method="POST" action="{{ url_for('resolver_mtsp', alcaldia=alcaldia, sector=sector) }}" id="tspForm" class="post">
+    <table class="form-table">
+      <tr>
+        <td><label for="tamano_poblacion">Tamaño de Población:</label></td>
+        <td><input type="text" name="tsp[tamano_poblacion]" min="0" required inputmode="numeric"
+                   oninput="this.value = this.value.replace(/[^0-9]/g, '');"></td>
+      </tr>
+      <tr>
+        <td><label for="num_generaciones">Número de Generaciones:</label></td>
+        <td><input type="text" name="tsp[num_generaciones]" min="0" required inputmode="numeric"
+                   oninput="this.value = this.value.replace(/[^0-9]/g, '');"></td>
+      </tr>
+      <tr>
+        <td><label for="tasa_mutacion">Tasa de Mutación:</label></td>
+        <td><input type="text" name="tsp[tasa_mutacion]" min="0" max="1" required inputmode="decimal"
+                   oninput="this.value = this.value.replace(/[^0-9.]/g, '');"></td>
+      </tr>
+      <tr>
+        <td><label for="tamano_elite">Tamaño de Elite:</label></td>
+        <td><input type="text" name="tsp[tamano_elite]" min="0" max="1" required inputmode="decimal"
+                   oninput="this.value = this.value.replace(/[^0-9.]/g, '');"></td>
+      </tr>
+    </table>
+    <div class="enviar-boton">
+      <button type="submit" class="btn">Iniciar Resolución MTSP</button>
+    </div>
+  </form>
+</div>
+
+<script src="{{ url_for('static', filename='js/alcaldias.js') }}"></script>
+{% endblock content %}

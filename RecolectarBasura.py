@@ -1961,17 +1961,17 @@ class ResolverMTSP:
 
     def _graficar_ruta(self, ruta_completa: List[int]) -> None:
         """
-        Visualiza la ruta completa sobre la red vial empleando OSMNX y Matplotlib.
-        
-        Ajusta el tamaño de los nodos con base en la cantidad de visitas (apariciones) en la ruta.
-        
-        :param ruta_completa: Lista de nodos que conforman la ruta completa.
-        :raises ErrorRedVial: Si ocurre algún error durante la visualización.
+        Genera la gráfica de la ruta y la guarda en un archivo en vez de mostrarla.
         """
         from matplotlib import pyplot as plt
-        conteo = Counter(ruta_completa)
-        tamanio_nodos = [10 * conteo.get(nodo, 0) for nodo in self.grafica.nodes()]
+        from collections import Counter
+
         try:
+            # Se calcula el tamaño de los nodos (esto es solo un ejemplo)
+            conteo = Counter(ruta_completa)
+            tamanio_nodos = [10 * conteo.get(nodo, 0) for nodo in self.grafica.nodes()]
+
+            # Usamos osmnx.plot_graph_route, indicando show=False para evitar la visualización
             fig, ax = ox.plot_graph_route(
                 self.grafica,
                 ruta_completa,
@@ -1980,11 +1980,17 @@ class ResolverMTSP:
                 node_color='blue',
                 bgcolor='white',
                 edge_color='gray',
-                edge_linewidth=0.5
+                edge_linewidth=0.5,
+                show=False  # No se muestra en pantalla
             )
-            plt.show()
+            # Se guarda la figura en un archivo (opcional)
+            output_path = os.path.join("temp", "imagenes", "ruta_mtsp.png")
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            fig.savefig(output_path, dpi=150)
+            plt.close(fig)  # Cerramos la figura para liberar recursos
         except Exception as e:
-            raise ErrorRedVial(f"Error al graficar la ruta: {e}")
+            # En caso de error, simplemente se omite la generación de la gráfica
+            print(f"Omitiendo graficación: {e}")
 
     def _resolver_MTSP_fuertemente_conexa(self) -> None:
         """

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}
+  Procesamiento Exitoso
+{% endblock title %}
+
+{% block content %}
+<div class="message-container">
+  <h2>Procesamiento de la Ruta Exitoso para {{ alcaldia }} - Sector {{ sector }}</h2>
+  <p>La red vial ha sido procesada y la ruta ha sido calculada exitosamente.</p>
+  <p>
+    <a href="{{ download_url }}" class="btn">Descargar Shapefiles de la Ruta</a>
+  </p>
+  <div class="botones-accion">
+    <a href="{{ url_for('seleccionar_sector', alcaldia=alcaldia) }}" class="btn">Procesar otro sector</a>
+    <a href="{{ url_for('limpiar_temp') }}" class="btn">Volver al Inicio</a>
+  </div>
+</div>
+{% endblock content %}
