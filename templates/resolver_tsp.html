@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}
-  Procesamiento Exitoso
-{% endblock title %}
 
 {% block content %}
 <div class="message-container">
-  <h2>Procesamiento de la Red Vial Exitoso para {{ alcaldia }}</h2>
-  <p>La red vial ha sido recortada y corregida exitosamente para el sector <strong>{{ sector }}</strong>.</p>
+  <h2>Procesamiento exitoso.</h2>
+  <p>La red vial ha sido recortada y corregida exitosamente para el <strong>{{ sector }}</strong>.</p>
 </div>
 
 <div class="form-container">
-  <h2>Parametros para Resolver el TSP</h2>
-  <!-- Este formulario es similar al inicial de "Sistema de Recolección de Basura",
-       pero puede adaptarse a los parámetros requeridos por la clase ResolverMTSP -->
-  <form method="POST" action="{{ url_for('resolver_mtsp', alcaldia=alcaldia, sector=sector) }}" id="tspForm" class="post">
+  <!-- Contenedor del encabezado y botón de ayuda -->
+  <div class="tsp-header">
+    <h2>Parámetros para Resolver el mTSP</h2>
+    <button type="button" id="helpTSPBtn" class="help-button">?</button>
+  </div>
+
+  <form method="POST" action="{{ url_for('resolver_tsp', alcaldia=alcaldia, sector=sector) }}" id="tspForm" class="post">
     <table class="form-table">
       <tr>
         <td><label for="tamano_poblacion">Tamaño de Población:</label></td>
@@ -32,16 +32,58 @@
                    oninput="this.value = this.value.replace(/[^0-9.]/g, '');"></td>
       </tr>
       <tr>
-        <td><label for="tamano_elite">Tamaño de Elite:</label></td>
+        <td><label for="tamano_elite">Tamaño de Élite:</label></td>
         <td><input type="text" name="tsp[tamano_elite]" min="0" max="1" required inputmode="decimal"
                    oninput="this.value = this.value.replace(/[^0-9.]/g, '');"></td>
       </tr>
     </table>
     <div class="enviar-boton">
-      <button type="submit" class="btn">Iniciar Resolución MTSP</button>
+      <button type="submit" class="btn">Continuar</button>
     </div>
   </form>
 </div>
 
-<script src="{{ url_for('static', filename='js/alcaldias.js') }}"></script>
+<!-- Pop-up de ayuda para el mTSP -->
+<div id="helpTSPPopup" class="help-popup">
+  <div class="help-popup-content" style="text-align: justify;">
+    <span id="closeHelpTSPPopup" class="close-button">&times;</span>
+    <h4>Parámetros del mTSP</h4>
+    <p>
+      Para abordar el Problema de Múltiples Agentes Viajeros (mTSP), se implementa una variante de algoritmo genético elitista en la que se definen parámetros específicos para optimizar la solución. Los parámetros establecidos son:
+    </p>
+    <ul>
+      <li>
+        <strong>Tamaño de Población:</strong> Es el número de soluciones simultáneas que se generan y evalúan en cada iteración del proceso evolutivo.
+      </li>
+      <li>
+        <strong>Número de Generaciones:</strong> Indica el número de ciclos evolutivos que se ejecutan para refinar la población inicial y acercarse a una solución óptima.
+      </li>
+      <li>
+        <strong>Tasa de Mutación:</strong> Representa la probabilidad de que se produzcan modificaciones aleatorias en las rutas, fomentando la diversidad del conjunto de soluciones.
+      </li>
+      <li>
+        <strong>Tamaño de Élite:</strong> Es la proporción de los individuos con mejor desempeño que se preservan y trasladan directamente a la siguiente generación, manteniendo sus características más ventajosas.
+      </li>
+    </ul>
+    <p>
+      Se deben ingresar únicamente valores numéricos válidos para cada campo, cumpliendo con las siguientes condiciones:
+    </p>
+    <ul>
+      <li>
+        Los parámetros <em>Tamaño de Población</em> y <em>Número de Generaciones</em> deben ser números enteros no negativos.
+      </li>
+      <li>
+        Los parámetros <em>Tasa de Mutación</em> y <em>Tamaño de Élite</em> deben ser valores decimales comprendidos entre 0 y 1.
+      </li>
+    </ul>
+    <p>
+      Dada la naturaleza del mTSP, el algoritmo puede generar múltiples rutas. Por ello, se ofrece la posibilidad al usuario de seleccionar aquella ruta que considere más adecuada para satisfacer sus requerimientos.
+    </p>
+  </div>
+</div>
+
+
+<!-- Script para controlar el pop-up de ayuda -->
+<script src="{{ url_for('static', filename='js/popup.js') }}"></script>
+
 {% endblock content %}

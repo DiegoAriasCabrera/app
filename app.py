@@ -60,8 +60,8 @@ def progreso_agrupamiento(alcaldia):
     
     Se leen los parámetros del formulario (tamaño de población, número de generaciones, tasa de mutación y factor de basura),
     se instancian los objetos Camion y se verifica la existencia del shapefile correspondiente a la alcaldía.
-    Luego se ejecuta el agrupamiento, se asignan los camiones, se realiza un post-procesamiento y se grafica la asignación,
-    guardándose la imagen y el resultado en formato JSON en la carpeta "temp/".
+    Luego se ejecuta el agrupamiento, se asignan los camiones, se realiza un post-procesamiento y se grafica la asignación
+    final sobre la gráfica. La imagen y el resultado se guardan en formato JSON en la carpeta "temp/".
     
     Finalmente, se redirige a la ruta de visualización de resultados para la alcaldía.
     """
@@ -214,7 +214,7 @@ def exportar_sectores(alcaldia):
     Utiliza la clase ExportarSectoresAGEB para exportar cada sector en un shapefile independiente.
     
     Se definen las rutas de entrada (archivo JSON del agrupamiento y shapefile de la alcaldía)
-    y la ruta de salida para guardar los sectores exportados. Ante error se retorna un mensaje apropiado.
+    y la ruta de salida para guardar los sectores exportados. Ante error se devuelve un mensaje apropiado.
     """
     ruta_agrupamiento = os.path.join(app.root_path, 'temp', 'agrupamiento', f"{alcaldia}_mejor_agrupamiento.json")
     ruta_shapefile = os.path.join(app.root_path, 'Alcaldías', f"{alcaldia}.shp")
@@ -274,11 +274,9 @@ def seleccionar_sector(alcaldia):
 def procesar_sector(alcaldia):
     """
     Ruta que procesa el sector seleccionado:
-    Primero recorta la red vial (calles y nodos) solamente para ese sector y,
-    posteriormente, aplica la corrección de conectividad para el sector.
-    
-    Se utiliza una función independiente para recortar el sector y otra para la corrección de conectividad,
-    sin modificar la clase ProcesadorCalles.
+    1) Recorta la red vial (calles y nodos) únicamente para ese sector.
+    2) Aplica la corrección de conectividad para el sector.
+    Se utiliza la clase ProcesadorCalles sin modificarla para aprovechar su lógica de recorte y corrección.
     """
     sector_id = request.form.get('sector_id')
     if not sector_id:
@@ -288,135 +286,107 @@ def procesar_sector(alcaldia):
     aristas_cdmx_shp = os.path.join(app.root_path, 'data', 'CDMX_aristas.shp')
     nodos_cdmx_shp   = os.path.join(app.root_path, 'data', 'CDMX_nodos.shp')
 
-    # Carpetas de entrada (shapefiles de sectores) y salida para los resultados intermedios
+    # Carpetas de entrada (shapefiles de sectores) y salida para los resultados
     carpeta_sectores = os.path.join(app.root_path, 'temp', 'sectores', alcaldia)
     carpeta_calles   = os.path.join(app.root_path, 'temp', 'calles_recortadas', alcaldia)
     carpeta_nodos    = os.path.join(app.root_path, 'temp', 'nodos_recortados', alcaldia)
+
+    # Carpetas para la salida final (calles y nodos con conectividad corregida)
+    carpeta_salida_calles_finales = os.path.join(app.root_path, 'temp', 'calles_finales', alcaldia)
+    carpeta_salida_nodos_finales  = os.path.join(app.root_path, 'temp', 'nodos_finales', alcaldia)
 
     # Shapefile del sector seleccionado
     ruta_sector = os.path.join(carpeta_sectores, f"{sector_id}.shp")
     if not os.path.exists(ruta_sector):
         return f"No se encontró el shapefile para el sector '{sector_id}'.", 404
 
+    # Instanciar la clase ProcesadorCalles sin modificarla para utilizar su lógica
+    procesador = ProcesadorCalles(
+        aristas_cdmx_shp=aristas_cdmx_shp,
+        nodos_cdmx_shp=nodos_cdmx_shp,
+        carpeta_sectores=carpeta_sectores,
+        carpeta_calles=carpeta_calles,  # aquí se guardarán las calles recortadas
+        carpeta_nodos=carpeta_nodos,    # aquí se guardarán los nodos recortados
+        carpeta_salida_calles=carpeta_salida_calles_finales,
+        carpeta_salida_nodos=carpeta_salida_nodos_finales
+    )
+
     # Asegurar que los directorios de salida existan
     os.makedirs(carpeta_calles, exist_ok=True)
     os.makedirs(carpeta_nodos, exist_ok=True)
-
-    def recortar_sector(aristas_shp, nodos_shp, sector_shp, out_calles, out_nodos, sector_id):
-        """
-        Recorta la red vial utilizando la geometría del sector seleccionado.
-        
-        :param aristas_shp: Ruta al shapefile con las aristas de la red vial completa.
-        :param nodos_shp:   Ruta al shapefile con los nodos de la red vial completa.
-        :param sector_shp:  Ruta al shapefile del sector seleccionado.
-        :param out_calles:  Carpeta de salida para las aristas recortadas.
-        :param out_nodos:   Carpeta de salida para los nodos recortados.
-        :param sector_id:   Identificador del sector.
-        :return: (bool, str) indicando éxito y mensaje.
-        """
-        try:
-            gdf_aristas = gpd.read_file(aristas_shp)
-            gdf_nodos   = gpd.read_file(nodos_shp)
-            gdf_sector  = gpd.read_file(sector_shp)
-            
-            # Unir las geometrías del sector en un solo polígono
-            poligono_sector = gdf_sector.unary_union
-            
-            # Recortar aristas y nodos de acuerdo con el polígono del sector
-            aristas_recortadas = gdf_aristas[gdf_aristas.intersects(poligono_sector)]
-            nodos_recortados   = gdf_nodos[gdf_nodos.within(poligono_sector)]
-            
-            aristas_salida = os.path.join(out_calles, f"{sector_id}_calles.shp")
-            nodos_salida   = os.path.join(out_nodos, f"{sector_id}_nodos.shp")
-            aristas_recortadas.to_file(aristas_salida)
-            nodos_recortados.to_file(nodos_salida)
-            
-            return (True, f"Sector '{sector_id}' recortado exitosamente.", aristas_salida, nodos_salida)
-        except Exception as e:
-            return (False, f"Error al recortar el sector '{sector_id}': {e}", None, None)
-
-    def corregir_conectividad_sector(nodos_shp, aristas_shp, out_nodos, out_calles, sector_id):
-        """
-        Corrige la conectividad de la red vial recortada para el sector seleccionado.
-        Esta función carga los shapefiles recortados, construye una gráfica usando NetworkX,
-        y conserva la componente conexa más grande. Los resultados se guardan en directorios finales.
-        
-        :param nodos_shp: Ruta del shapefile de nodos recortados.
-        :param aristas_shp: Ruta del shapefile de aristas recortadas.
-        :param out_nodos: Carpeta de salida para los nodos finales.
-        :param out_calles: Carpeta de salida para las aristas finales.
-        :param sector_id: Identificador del sector.
-        :return: (bool, str) indicando éxito y mensaje.
-        """
-        try:
-            gdf_nodos = gpd.read_file(nodos_shp)
-            gdf_aristas = gpd.read_file(aristas_shp)
-            
-            # Crear una gráfica no dirigida (para conectividad)
-            G = nx.Graph()
-            # Agregar nodos: se supone que la columna 'osmid' identifica los nodos
-            for idx, node in gdf_nodos.iterrows():
-                G.add_node(node['osmid'], geometry=node.geometry)
-            # Agregar aristas: se asume que las columnas 'from' y 'to' existen en el shapefile de aristas
-            for idx, row in gdf_aristas.iterrows():
-                if 'from' in row and 'to' in row:
-                    G.add_edge(row['from'], row['to'], geometry=row.geometry)
-            
-            # Si la gráfica no es conexa, conservar solo la componente más grande.
-            if not nx.is_connected(G):
-                components = list(nx.connected_components(G))
-                largest_component = max(components, key=len)
-                gdf_nodos_corr = gdf_nodos[gdf_nodos['osmid'].isin(largest_component)]
-                gdf_aristas_corr = gdf_aristas[
-                    gdf_aristas.apply(lambda row: row['from'] in largest_component and row['to'] in largest_component, axis=1)
-                ]
-            else:
-                gdf_nodos_corr = gdf_nodos
-                gdf_aristas_corr = gdf_aristas
-            
-            nodos_salida = os.path.join(out_nodos, f"{sector_id}_nodos_finales.shp")
-            aristas_salida = os.path.join(out_calles, f"{sector_id}_calles_finales.shp")
-            gdf_nodos_corr.to_file(nodos_salida)
-            gdf_aristas_corr.to_file(aristas_salida)
-            
-            return (True, f"Conectividad corregida para sector '{sector_id}'.")
-        except Exception as e:
-            return (False, f"Error en la corrección de conectividad para sector '{sector_id}': {e}")
-
-    # Ejecutar el recorte del sector
-    resultado_recorte, mensaje_recorte, aristas_recortadas_path, nodos_recortados_path = recortar_sector(
-        aristas_shp=aristas_cdmx_shp,
-        nodos_shp=nodos_cdmx_shp,
-        sector_shp=ruta_sector,
-        out_calles=carpeta_calles,
-        out_nodos=carpeta_nodos,
-        sector_id=sector_id
-    )
-    if not resultado_recorte:
-        return f"Error al procesar el sector '{sector_id}': {mensaje_recorte}", 500
-
-    carpeta_salida_calles_finales = os.path.join(app.root_path, 'temp', 'calles_finales', alcaldia)
-    carpeta_salida_nodos_finales  = os.path.join(app.root_path, 'temp', 'nodos_finales', alcaldia)
     os.makedirs(carpeta_salida_calles_finales, exist_ok=True)
     os.makedirs(carpeta_salida_nodos_finales, exist_ok=True)
-    resultado_conectividad, mensaje_conectividad = corregir_conectividad_sector(
-        nodos_shp=nodos_recortados_path,
-        aristas_shp=aristas_recortadas_path,
-        out_nodos=carpeta_salida_nodos_finales,
-        out_calles=carpeta_salida_calles_finales,
-        sector_id=sector_id
-    )
-    if not resultado_conectividad:
-        return f"Error al corregir la conectividad del sector '{sector_id}': {mensaje_conectividad}", 500
 
-    flash(f"{mensaje_recorte} {mensaje_conectividad}", "success")
-    # Se renderiza el nuevo template 'resolver_tsp.html', enviando la alcaldía y el sector procesado.
+    # -------------------------------------------------------------------------
+    # 1) RECORTAR LA RED VIAL PARA UN ÚNICO SECTOR
+    #    Se replica el fragmento de lógica de recorte enfocándose solo en el shapefile del sector seleccionado.
+    # -------------------------------------------------------------------------
+    try:
+        # Cargar el shapefile del sector
+        gdf_sector = procesador._leer_shapefile(ruta_sector)
+        # Cargar la red vial completa
+        gdf_aristas_cdmx = procesador._leer_shapefile(procesador.aristas_cdmx_shp)
+        gdf_nodos_cdmx   = procesador._leer_shapefile(procesador.nodos_cdmx_shp)
+
+        # Unir las geometrías del sector en un solo polígono
+        poligono_sector = gdf_sector.unary_union
+
+        # Recortar las aristas que intersecten el polígono del sector
+        calles_recortadas = gdf_aristas_cdmx[gdf_aristas_cdmx.intersects(poligono_sector)].copy()
+
+        # Identificar los nodos correspondientes a dichas aristas (basado en las columnas 'from' y 'to')
+        ids_nodos = set()
+        for _, calle in calles_recortadas.iterrows():
+            if 'from' not in calle or 'to' not in calle:
+                return "Las columnas 'from' o 'to' faltan en las aristas.", 500
+            ids_nodos.add(calle["from"])
+            ids_nodos.add(calle["to"])
+
+        nodos_recortados = gdf_nodos_cdmx[gdf_nodos_cdmx["osmid"].isin(ids_nodos)].copy()
+
+        # Rutas de salida para el shapefile recortado de este sector
+        aristas_recortadas_path = os.path.join(carpeta_calles, f"{sector_id}_calles.shp")
+        nodos_recortados_path   = os.path.join(carpeta_nodos, f"{sector_id}_nodos.shp")
+
+        # Guardar los shapefiles recortados
+        calles_recortadas.to_file(aristas_recortadas_path, encoding="utf-8")
+        nodos_recortados.to_file(nodos_recortados_path, encoding="utf-8")
+
+    except ErrorShapefile as err_shp:
+        return f"Error al leer/escribir shapefiles: {err_shp}", 500
+    except Exception as e:
+        return f"Error al recortar el sector '{sector_id}': {e}", 500
+
+    # -------------------------------------------------------------------------
+    # 2) CORREGIR LA CONECTIVIDAD PARA EL SECTOR RECORTADO
+    # -------------------------------------------------------------------------
+    try:
+        procesador.corregir_conectividad(
+            nodos_recortados_shp=nodos_recortados_path,
+            aristas_recortadas_shp=aristas_recortadas_path
+        )
+    except ErrorShapefile as err_shp:
+        return f"Error al corregir la conectividad del sector '{sector_id}': {err_shp}", 500
+    except ErrorRedVial as err_net:
+        return f"Error en la red vial al corregir el sector '{sector_id}': {err_net}", 500
+    except Exception as e:
+        return f"Error general al corregir la conectividad del sector '{sector_id}': {e}", 500
+
+    # Si todo sale bien, se muestra un mensaje de éxito y se renderiza la plantilla correspondiente
+    flash(f"Sector '{sector_id}' recortado y corregido exitosamente.", "success")
     return render_template('resolver_tsp.html', alcaldia=alcaldia, sector=sector_id)
 
 
 @app.route('/resolver_tsp/<alcaldia>/<sector>', methods=['POST'])
 def resolver_tsp(alcaldia, sector):
-    # Ubicar los shapefiles de nodos y aristas para el sector
+    """
+    Procesa la resolución del TSP (problema del viajante múltiple) para el sector seleccionado.
+    
+    Se ubican los shapefiles de nodos y calles finales correspondientes al sector y se ejecuta el algoritmo TSP.
+    Posteriormente, se exporta la ruta generada a shapefiles, se comprime en un archivo ZIP y se renderiza
+    un template para permitir la descarga del resultado.
+    """
+    # Ubicar los shapefiles de nodos y calles para el sector
     nodos_dir = os.path.join(app.root_path, 'temp', 'nodos_finales', alcaldia)
     calles_dir = os.path.join(app.root_path, 'temp', 'calles_finales', alcaldia)
     ruta_nodos = os.path.join(nodos_dir, f"{sector}_nodos_finales.shp")
@@ -473,20 +443,30 @@ def download_resolver_tsp(alcaldia, sector, filename):
     return send_from_directory(export_dir, filename, as_attachment=True)
 
 
-@app.route('/limpiar_temp', methods=['GET'])
+@app.route('/limpiar_temp')
 def limpiar_temp():
     """
-    Elimina todos los archivos de las carpetas que se encuentran en la carpeta 'temp'
+    Elimina todos los archivos y subdirectorios de la carpeta 'temp'
     y redirige al listado de alcaldías.
     """
     temp_path = os.path.join(app.root_path, 'temp')
     try:
-        for root, dirs, files in os.walk(temp_path):
+        # Recorrer la carpeta 'temp' en modo 'topdown=False' para
+        # eliminar primero los contenidos y luego los directorios.
+        for root, dirs, files in os.walk(temp_path, topdown=False):
+            # Eliminar todos los archivos
             for file in files:
                 file_path = os.path.join(root, file)
                 os.remove(file_path)
+            # Eliminar todos los subdirectorios
+            for directory in dirs:
+                dir_path = os.path.join(root, directory)
+                shutil.rmtree(dir_path)
+        
+        flash("Carpeta 'temp' limpiada correctamente.", "success")
     except Exception as e:
         flash(f"Error al limpiar archivos temporales: {e}", "error")
+    
     return redirect(url_for('listar_alcaldias'))
 
 

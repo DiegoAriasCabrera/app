@@ -6,13 +6,37 @@
 
 {% block content %}
 <div class="message-container">
-  <h2>Resultados de Agrupamiento para {{ alcaldia }}</h2>
-  <p>Se crearon {{ num_grupos }} grupos.</p>
-  <p>A continuación se muestra el mapa resultante:</p>
+  <h2>Resultados del agrupamiento para la alcaldía {{ alcaldia }}</h2>
+  <p>
+    Se crearon {{ num_grupos }} grupos. 
+    <button type="button" id="helpSectorBtn" class="help-button">?</button>
+  </p>
   <img src="{{ imagen_url }}" alt="Resultado del agrupamiento" style="max-inline-size:80%; border:1px solid #333;">
   
-  <form action="{{ url_for('exportar_sectores', alcaldia=alcaldia) }}" method="post" style="margin-block-start:20px;">
+  <form action="{{ url_for('seleccionar_sector', alcaldia=alcaldia) }}" method="get" style="margin-block-start:20px;">
     <button type="submit" class="btn">Continuar</button>
   </form>
 </div>
+
+<!-- Pop-up de ayuda para la asignación de los camiones -->
+<div id="helpSectorPopup" class="help-popup">
+  <div class="help-popup-content" style="text-align: justify;">
+    <span id="closeHelpSectorPopup" class="close-button">&times;</span>
+    <h4>¿Qué significa esto?</h4>
+    <p>
+      En la imagen se pueden observar puntos y líneas que representan nodos y aristas, respectivamente. Dichos nodos corresponden a las AGEB utilizadas para conformar los sectores AGEB. La variación en el tamaño de los nodos refleja, de manera visual, la cantidad generada por cada AGEB. Asimismo, las líneas representan las conexiones entre nodos, lo que indica que se trata de AGEB colindantes. Los colores asignados a los nodos permiten identificar el grupo al cual pertenece cada uno.
+    </p>
+    <p>
+      Cuando se detecta la ausencia de asignación de camiones en ciertos sectores o la presencia de AGEB individuales (nodos sin conexiones), se interpreta que no ha sido posible encontrar una solución óptima para dichos sectores. Esto podría deberse a uno de los siguientes factores:
+    </p>
+    <ul>
+      <li>La cantidad de camiones resulta insuficiente para cubrir la demanda de recolección de basura.</li>
+      <li>La capacidad máxima de los camiones disponibles es inferior a la cantidad de residuos generados en la AGEB correspondiente.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Script para controlar los pop-ups de ayuda -->
+<script src="{{ url_for('static', filename='js/popup.js') }}"></script>
+
 {% endblock content %}

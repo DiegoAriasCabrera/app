@@ -52,7 +52,7 @@ class Camion:
     
     :param capacidad: Capacidad máxima del camión (peso máximo de carga).
     :type capacidad: float
-    :param factor_reserva: Factor multiplicador para otorgar margen adicional a la capacidad.
+    :param factor_reserva: Porcenataje efectivo de carga que se puede utilizar.
     :type factor_reserva: float
     :param cantidad_camiones: Número de camiones de este tipo disponibles.
     :type cantidad_camiones: int
@@ -779,7 +779,6 @@ class AgrupamientoAGEB:
                 mapa_colores[nodo] = color_grupo
 
         plt.figure(figsize=(16, 10))
-        plt.title("Agrupamiento de AGEB con asignación de camiones")
         nx.draw(
             self.gráfica,
             posiciones,
@@ -1586,17 +1585,16 @@ class ProcesadorCalles:
 # ============================================================================
 class ResolverMTSP:
     """
-    Permite resolver el Problema del Agente Viajero usando el algoritmo genético eltista
+    Permite resolver el Problema del Agente Viajero usando el algoritmo genético elitista
     sobre una red vial representada como un DiGraph de NetworkX. A cada arista se le asigna un
-    peso basado en la longitud, y se busca la ruta (camino) que minimice la distancia total para
+    peso basado en su longitud, y se busca la ruta (ciclo) que minimice la distancia total para
     visitar la mayor cantidad de nodos posible (idealmente todos), ya sea en redes fuertemente
     conexas o en aquellas compuestas por múltiples SCC.
 
-    Se han incorporado dos variantes en la construcción de la ruta completa:
-      - Para redes fuertemente conexas se evita la inclusión de nodos intermedios ya visitados.
-        El objetivo es aproximarse a un camino hamiltoniano que abarque los nodos requeridos.
-      - Para redes con múltiples SCC se realiza el mismo procedimiento en cada componente,
-        calculando un camino interno (o aproximación) en cada SCC.
+    Se han implementado dos variantes en la construcción de la ruta:
+      - Para una red fuertemente conexa se obtiene un ciclo hamiltoniano que visite cada nodo exactamente una vez.
+      - Para redes con múltiples SCC se aplica el mismo procedimiento de solución de forma independiente en cada SCC,
+        generando así un único ciclo por componente.
     """
 
     def __init__(
@@ -1611,7 +1609,7 @@ class ResolverMTSP:
     ):
         """
         Inicializa los parámetros necesarios para ejecutar el algoritmo genético que soluciona el TSP.
-        
+
         :param ruta_nodos: Ruta al shapefile con los nodos de la red vial.
         :param ruta_aristas: Ruta al shapefile con las aristas de la red vial.
         :param grafica: Gráfica dirigida (opcional) que representa la red vial. Si no se proporciona,
@@ -1635,12 +1633,12 @@ class ResolverMTSP:
     def _crear_red_vial(self) -> nx.DiGraph:
         """
         Lee los shapefiles de nodos y aristas utilizando GeoPandas y construye la red vial.
-        
+
         Verifica la existencia de las columnas mínimas requeridas, crea la columna 'key' si no existe
         y replica las aristas correspondientes a calles de doble sentido (oneway=0) para garantizar la bidireccionalidad.
-        
+
         :devuelve: Gráfica dirigida (DiGraph) que representa la red vial.
-        :raises ErrorShapefile: Si ocurre un error en la lectura o procesamiento de los shapefiles.
+        :raises ErrorShapefile: Si ocurre un error en la lectura o procesamiento.
         :raises ErrorRedVial: Si ocurre un error al construir la gráfica.
         """
         try:
@@ -1648,23 +1646,23 @@ class ResolverMTSP:
             gdf_aristas = gpd.read_file(self.ruta_aristas)
         except Exception as e:
             raise ErrorShapefile(f"Error al leer los shapefiles: {e}")
-
+        
         if 'osmid' not in gdf_nodos.columns:
             raise ErrorShapefile("El shapefile de nodos debe incluir la columna 'osmid'.")
         gdf_nodos.set_index('osmid', inplace=True)
-
+        
         columnas_requeridas = ['from', 'to']
         for col in columnas_requeridas:
             if col not in gdf_aristas.columns:
                 raise ErrorShapefile(f"El shapefile de aristas debe incluir la columna '{col}'.")
-
+        
         if 'key' not in gdf_aristas.columns:
             gdf_aristas['key'] = 0
         if 'oneway' not in gdf_aristas.columns:
-            gdf_aristas['oneway'] = 0  # Se asume que las calles son de doble sentido
-
+            gdf_aristas['oneway'] = 0  # Se asume que las calles son bidireccionales
+        
         edges_extra = []
-        for idx, row in gdf_aristas.iterrows():
+        for _, row in gdf_aristas.iterrows():
             if row['oneway'] == 0:
                 reverse_row = copy.deepcopy(row)
                 reverse_row['from'], reverse_row['to'] = row['to'], row['from']
@@ -1674,44 +1672,39 @@ class ResolverMTSP:
             df_extra = pd.DataFrame(edges_extra, columns=gdf_aristas.columns)
             gdf_extra = gpd.GeoDataFrame(df_extra, geometry=gdf_aristas.geometry.name, crs=gdf_aristas.crs)
             gdf_aristas = pd.concat([gdf_aristas, gdf_extra], ignore_index=True)
-
+        
         gdf_aristas.set_index(['from', 'to', 'key'], inplace=True)
-
         try:
             grafica = ox.graph_from_gdfs(gdf_nodos, gdf_aristas)
         except Exception as e:
             raise ErrorRedVial(f"Error al crear la red vial: {e}")
-
         return grafica
 
     def _asignar_pesos_aristas(self) -> None:
         """
         Asigna a cada arista de la red vial un peso basado en su longitud.
         
-        Utiliza el valor contenido en la columna 'length' y asigna el valor 1.0 en caso de que dicha columna no exista.
+        Utiliza el valor de la columna 'length' o 1.0 si no existe.
         """
         for _, _, datos in self.grafica.edges(data=True):
             datos['weight'] = datos.get('length', 1.0)
 
     def _calcular_matriz_distancias(self, nodos: List[int]) -> Dict[int, Dict[int, Union[float, int]]]:
         """
-        Calcula la matriz de distancias entre todos los pares de nodos especificados, usando el algoritmo de Dijkstra.
+        Calcula la matriz de distancias entre los nodos especificados usando Dijkstra.
         
-        Construye un diccionario anidado en el que, para cada nodo, se asigna la distancia mínima
-        hacia cada otro nodo, usando la longitud de las aristas como peso.
-        
-        :param nodos: Lista de identificadores de nodos a considerar.
-        :devuelve: Matriz de distancias en forma de diccionario anidado.
-        :raises ErrorRedVial: Si ocurre algún error durante el cálculo de las distancias.
+        :param nodos: Lista de nodos a considerar.
+        :devuelve: Diccionario anidado con la distancia mínima entre cada par.
+        :raises ErrorRedVial: Si ocurre un error durante el cálculo.
         """
         matriz = {}
         try:
             for nodo_i in nodos:
                 matriz[nodo_i] = {}
-                distancias_origen = nx.single_source_dijkstra_path_length(self.grafica, nodo_i, weight='length')
+                distancias = nx.single_source_dijkstra_path_length(self.grafica, nodo_i, weight='length')
                 for nodo_j in nodos:
                     if nodo_i != nodo_j:
-                        matriz[nodo_i][nodo_j] = distancias_origen.get(nodo_j, np.inf)
+                        matriz[nodo_i][nodo_j] = distancias.get(nodo_j, np.inf)
                     else:
                         matriz[nodo_i][nodo_j] = 0.0
         except Exception as e:
@@ -1720,162 +1713,198 @@ class ResolverMTSP:
 
     def _crear_poblacion(self, nodos: List[int]) -> List[List[int]]:
         """
-        Genera la población inicial para el algoritmo genético, produciendo ciclos que inician y terminan
-        en el mismo nodo. Cada individuo es una aproximación a un ciclo hamiltoniano
-        que incluye todos los nodos especificados.
+        Genera la población inicial a partir de caminos hamiltonianos.
+        Se inicia en un nodo aleatorio y se siguen los vecinos adyacentes que aún no se han visitado;
+        el camino se detiene solo al encontrar un nodo repetido o no hallar vecinos nuevos.
+        Si se visitan todos los nodos y hay enlace para cerrar el ciclo, se añade el nodo inicial.
         
-        :param nodos: Lista de identificadores de nodos que deben visitarse.
-        :devuelve: Lista de individuos (ciclos).
+        :param nodos: Lista de nodos a visitar.
+        :devuelve: Lista de caminos candidatos.
         """
         poblacion = []
         for _ in range(self.tamano_poblacion):
-            # Selecciona aleatoriamente un nodo de inicio
-            nodo_inicial = random.choice(nodos)
-            
-            # Genera una permutación de los restantes
-            restantes = [n for n in nodos if n != nodo_inicial]
-            perm_restantes = random.sample(restantes, len(restantes))
-            
-            # Forma el ciclo => [nodo_inicial, ..., otros..., nodo_inicial]
-            individuo = [nodo_inicial] + perm_restantes + [nodo_inicial]
-            poblacion.append(individuo)
+            inicio = random.choice(nodos)
+            camino = [inicio]
+            actual = inicio
+            while True:
+                vecinos = [v for v in list(self.grafica.successors(actual)) if v in nodos and v not in camino]
+                if vecinos:
+                    siguiente = random.choice(vecinos)
+                    camino.append(siguiente)
+                    actual = siguiente
+                    if len(camino) == len(nodos):
+                        if self.grafica.has_edge(camino[-1], inicio):
+                            camino.append(inicio)
+                        break
+                else:
+                    vecinos_visitados = [v for v in list(self.grafica.successors(actual)) if v in camino]
+                    if vecinos_visitados:
+                        siguiente = random.choice(vecinos_visitados)
+                        camino.append(siguiente)
+                    break
+            poblacion.append(camino)
         return poblacion
 
-    def _calcular_fitness(self, individuo: List[int], matriz: Dict[int, Dict[int, Union[float, int]]]) -> float:
+    def _reparar_ruta(self, ruta: List[int], nodos: List[int],
+                      matriz: Dict[int, Dict[int, Union[float, int]]]) -> List[int]:
         """
-        Calcula la medida de fitness de un individuo que representa un ciclo. Se evalúa
-        si se incluyen todos los nodos sin repetirlos (aparte del retorno al inicial),
-        y se calcula la distancia total. Se penaliza fuertemente la imposibilidad de enlazar
-        nodos consecutivos o la repetición indebida de nodos.
+        Repara un camino para asegurar que incluya todos los nodos sin repetir ninguno.
+        Se elimina la duplicación manteniendo el orden de aparición y se insertan los nodos faltantes en la posición que
+        minimice el incremento de distancia. Finalmente, cierra el ciclo.
         
-        :param individuo: Ciclo representado como lista de nodos (el primero y el último son el mismo).
-        :param matriz: Matriz de distancias entre nodos.
-        :devuelve: Valor de fitness (mientras más bajo, mejor). Se asigna un valor alto si la ruta es inviable.
+        :param ruta: Camino potencialmente incompleto.
+        :param nodos: Conjunto completo de nodos que se deben incluir.
+        :param matriz: Matriz de distancias.
+        :devuelve: Ciclo hamiltoniano completo.
+        """
+        nueva = []
+        for nodo in ruta[:-1]:
+            if nodo not in nueva:
+                nueva.append(nodo)
+        missing = list(set(nodos) - set(nueva))
+        for m in missing:
+            best_increase = float('inf')
+            best_index = None
+            for i in range(len(nueva)):
+                j = (i + 1) % len(nueva)
+                increase = (matriz[nueva[i]].get(m, np.inf) +
+                            matriz[m].get(nueva[j], np.inf) -
+                            matriz[nueva[i]].get(nueva[j], np.inf))
+                if increase < best_increase:
+                    best_increase = increase
+                    best_index = j
+            nueva.insert(best_index, m)
+        nueva.append(nueva[0])
+        return nueva
+
+    def _calcular_fitness(self, individuo: List[int],
+                           matriz: Dict[int, Dict[int, Union[float, int]]]) -> float:
+        """
+        Calcula el fitness de un camino penalizando repeticiones y desconexiones.
+        
+        :param individuo: Camino (lista de nodos), donde el primero y el último deben ser iguales si es ciclo.
+        :param matriz: Matriz de distancias.
+        :devuelve: Valor de fitness (menor es mejor); se asigna un valor muy alto a rutas inviables.
         """
         distancia_total = 0.0
-        visitados_unicos = set()
-
+        visitados = set()
         for i in range(len(individuo) - 1):
             ni = individuo[i]
             nj = individuo[i + 1]
-
-            # Ignora la repetición entre el primero y el último que cierran el ciclo
-            if i < len(individuo) - 2:  
-                # Se excluye el último para no contar la igualdad (primer==último)
-                if ni in visitados_unicos:
+            if i < len(individuo) - 2:
+                if ni in visitados:
                     return 1e12
-                visitados_unicos.add(ni)
-
-            dist = matriz[ni].get(nj, np.inf)
+                visitados.add(ni)
+            try:
+                dist = matriz[ni].get(nj, np.inf)
+            except KeyError:
+                return 1e12
             if np.isinf(dist):
                 return 1e12
-
             distancia_total += dist
-
-        if len(visitados_unicos) < (len(individuo) - 1):
+        if len(visitados) < (len(individuo) - 1):
             return 1e12
-
         return distancia_total
 
-    def _seleccionar(self, poblacion: List[List[int]], aptitudes: List[float], cantidad: int) -> List[List[int]]:
+    def _seleccionar(self, poblacion: List[List[int]], aptitudes: List[float],
+                     cantidad: int) -> List[List[int]]:
         """
-        Selecciona los mejores individuos de la población según su fitness (menor es mejor).
+        Selecciona los mejores caminos según fitness (menor es mejor).
         
-        :param poblacion: Lista de individuos.
-        :param aptitudes: Lista de valores de fitness asociados a cada individuo.
-        :param cantidad: Número de individuos a seleccionar.
-        :devuelve: Lista de individuos seleccionados.
+        :param poblacion: Lista de caminos.
+        :param aptitudes: Valores de fitness.
+        :param cantidad: Número de caminos a seleccionar.
+        :devuelve: Lista de caminos seleccionados.
         """
-        combinacion = list(zip(poblacion, aptitudes))
-        combinacion_ordenada = sorted(combinacion, key=lambda x: x[1])
-        return [ind for ind, _ in combinacion_ordenada[:cantidad]]
+        combinados = list(zip(poblacion, aptitudes))
+        combinados_ordenados = sorted(combinados, key=lambda x: x[1])
+        return [ind for ind, _ in combinados_ordenados[:cantidad]]
 
     def _cruzar(self, padre1: List[int], padre2: List[int]) -> List[int]:
         """
-        Realiza el cruce entre dos individuos (ciclos) mediante el intercambio aleatorio de un segmento.
+        Realiza el cruce entre dos caminos utilizando Order Crossover (OX).
+        Se selecciona un segmento del primer padre y se completan las posiciones vacías con
+        los nodos del segundo padre en orden, sin producir repeticiones.
+        Se cierra el ciclo al final.
         
-        Copia un segmento del primer padre y completa los nodos faltantes con el orden del segundo padre.
-        
-        :param padre1: Primer individuo (lista de nodos, ciclo).
-        :param padre2: Segundo individuo (lista de nodos, ciclo).
-        :devuelve: Nuevo individuo (hijo) resultante del cruce, conservando la idea de ciclo.
+        :param padre1: Primer camino.
+        :param padre2: Segundo camino.
+        :devuelve: Nuevo camino hamiltoniano resultante.
         """
-        base1 = padre1[:-1]  # Sin repetir el último
-        base2 = padre2[:-1]
-
-        tamano = len(base1)
-        inicio, fin = sorted(random.sample(range(tamano), 2))
-        hijo_parcial = [None] * tamano
-
-        # Copia el segmento [inicio:fin] de base1
-        hijo_parcial[inicio:fin] = base1[inicio:fin]
-
-        # Completa con el orden del segundo padre
-        indice = fin
-        for nodo in base2:
-            if nodo not in hijo_parcial:
-                if indice >= tamano:
-                    indice = 0
-                hijo_parcial[indice] = nodo
-                indice += 1
-
-        # Reconstruye el ciclo agregando al final el mismo nodo que al inicio
-        hijo = hijo_parcial + [hijo_parcial[0]]
-        return hijo
+        n = len(padre1) - 1  # Excluir el duplicado final
+        start, end = sorted(random.sample(range(n), 2))
+        child = [None] * n
+        for i in range(start, end + 1):
+            child[i] = padre1[i]
+        pos = (end + 1) % n
+        for node in padre2[:-1]:
+            if node not in child:
+                child[pos] = node
+                pos = (pos + 1) % n
+        child.append(child[0])
+        return child
 
     def _mutar(self, individuo: List[int]) -> List[int]:
         """
-        Aplica mutación a un individuo, intercambiando aleatoriamente dos nodos
-        según la tasa de mutación establecida. Mantiene la estructura de ciclo.
+        Aplica mutación intercambiando dos nodos aleatorios en el camino.
         
-        :param individuo: Lista de nodos que representa el ciclo.
-        :devuelve: Nuevo individuo tras aplicar la mutación.
+        :param individuo: Camino (lista de nodos).
+        :devuelve: Camino mutado.
         """
-        ciclo_base = individuo[:-1]
-        for i in range(len(ciclo_base)):
+        base = individuo[:-1]
+        for i in range(len(base)):
             if random.random() < self.tasa_mutacion:
-                j = random.randint(0, len(ciclo_base) - 1)
-                ciclo_base[i], ciclo_base[j] = ciclo_base[j], ciclo_base[i]
-        nuevo = ciclo_base + [ciclo_base[0]]
+                j = random.randint(0, len(base) - 1)
+                base[i], base[j] = base[j], base[i]
+        nuevo = base + [base[0]]
         return nuevo
 
-    def _evolucionar_poblacion(self, poblacion: List[List[int]], matriz: Dict[int, Dict[int, Union[float, int]]]) -> List[List[int]]:
+    def _evolucionar_poblacion(self, poblacion: List[List[int]],
+                               matriz: Dict[int, Dict[int, Union[float, int]]]) -> List[List[int]]:
         """
-        Evoluciona la población mediante selección, cruce, mutación y elitismo.
+        Evoluciona la población aplicando selección, cruce, mutación y elitismo.
         
-        Se calculan los fitness, se selecciona una parte de la población y se genera
-        nueva población hasta completar el número original, preservando la élite.
-        
-        :param poblacion: Población actual (lista de ciclos).
+        :param poblacion: Lista actual de caminos.
         :param matriz: Matriz de distancias.
         :devuelve: Nueva población evolucionada.
         """
         aptitudes = [self._calcular_fitness(ind, matriz) for ind in poblacion]
-        numero_elite = max(1, int(self.tamano_elite * len(poblacion)))
-        elite = self._seleccionar(poblacion, aptitudes, numero_elite)
+        elite = self._seleccionar(poblacion, aptitudes, max(1, int(self.tamano_elite * len(poblacion))))
         seleccionados = self._seleccionar(poblacion, aptitudes, len(poblacion) // 2)
-        nueva_poblacion = []
-        while len(nueva_poblacion) < (len(poblacion) - len(elite)):
+        nueva = []
+        while len(nueva) < (len(poblacion) - len(elite)):
             padre1, padre2 = random.sample(seleccionados, 2)
             hijo = self._mutar(self._cruzar(padre1, padre2))
-            nueva_poblacion.append(hijo)
-        nueva_poblacion += elite
-        return nueva_poblacion
+            nueva.append(hijo)
+        nueva += elite
+        return nueva
 
-    def _calcular_ruta_completa_fuertemente_conexa(self, mejor_ruta: List[int]) -> List[int]:
+    def _resolver_MTSP_subgraph(self, nodos: List[int], matriz: Dict[int, Dict[int, Union[float, int]]]) -> List[int]:
         """
-        Construye la ruta completa a partir del individuo óptimo para redes fuertemente conexas.
+        Aplica el procedimiento completo para obtener un ciclo hamiltoniano en un conjunto de nodos.
+        Se genera la población, se evoluciona y se repara el mejor camino para asegurar la cobertura completa.
         
-        El individuo ya representa un ciclo (mismo primer y último nodo), pero se verifica la
-        conexión entre nodos consecutivos. Si no existe un enlace directo, se calcula la
-        ruta más corta mediante nx.shortest_path. Si algún nodo intermedio ya fue visitado,
-        se opta por la conexión directa para evitar duplicados.
-        
-        :param mejor_ruta: Lista de nodos ordenada de la solución óptima (ciclo).
-        :devuelve: Lista de nodos que conforman la ruta completa (ciclo expandido).
-        :raises ErrorRedVial: Si no existe ruta entre dos nodos consecutivos.
+        :param nodos: Lista de nodos del subgrafo.
+        :param matriz: Matriz de distancias para el subgrafo.
+        :devuelve: Ciclo hamiltoniano completo.
         """
-        ruta_completa = []
+        poblacion = self._crear_poblacion(nodos)
+        for _ in tqdm(range(self.generaciones), desc="Generaciones", ncols=80):
+            poblacion = self._evolucionar_poblacion(poblacion, matriz)
+        mejor = min(poblacion, key=lambda ind: self._calcular_fitness(ind, matriz))
+        ruta_parcial = self._calcular_ruta_completa_fuertemente_conexa_aux(mejor)
+        ruta_completa = self._reparar_ruta(ruta_parcial, nodos, matriz)
+        return ruta_completa
+
+    def _calcular_ruta_completa_fuertemente_conexa_aux(self, mejor_ruta: List[int]) -> List[int]:
+        """
+        Construye la ruta expandida (posiblemente con repeticiones) a partir del individuo óptimo.
+        
+        :param mejor_ruta: Camino obtenido del algoritmo genético.
+        :devuelve: Camino expandido.
+        :raises ErrorRedVial: Si no se puede obtener conexión entre nodos consecutivos.
+        """
+        ruta = []
         for i in range(len(mejor_ruta) - 1):
             origen = mejor_ruta[i]
             destino = mejor_ruta[i + 1]
@@ -1886,264 +1915,126 @@ class ResolverMTSP:
                     subruta = nx.shortest_path(self.grafica, origen, destino, weight='length')
                 except nx.NetworkXNoPath:
                     raise ErrorRedVial(f"No existe ruta entre {origen} y {destino}")
-                if any(n in ruta_completa for n in subruta[1:-1]):
+                if any(n in ruta for n in subruta[1:-1]):
                     subruta = [origen, destino]
-            if not ruta_completa:
-                ruta_completa.extend(subruta)
+            if not ruta:
+                ruta.extend(subruta)
             else:
-                if ruta_completa[-1] == subruta[0]:
-                    ruta_completa.extend(subruta[1:])
+                if ruta[-1] == subruta[0]:
+                    ruta.extend(subruta[1:])
                 else:
-                    ruta_completa.extend(subruta)
-        return ruta_completa
+                    ruta.extend(subruta)
+        return ruta
 
-    def _calcular_ruta_completa_scc(self, mejor_ruta: List[int]) -> List[int]:
+    def _calcular_distancia_total(self, ruta: List[int]) -> float:
         """
-        Construye la ruta completa a partir del individuo óptimo en redes con múltiples SCC.
+        Calcula la distancia total del ciclo sumando la longitud de cada arista.
         
-        Para cada par de nodos consecutivos se calcula la subruta con nx.shortest_path,
-        filtrando nodos intermedios ya visitados. Se emplea un conjunto de nodos ya visitados
-        para evitar repeticiones, manteniendo siempre el origen y destino.
-        
-        :param mejor_ruta: Lista de nodos que representa la solución óptima en el SCC (ciclo).
-        :devuelve: Lista de nodos que conforman la ruta completa en el SCC.
-        :raises ErrorRedVial: Si no existe un camino entre dos nodos consecutivos.
-        """
-        ruta_completa = []
-        visitados = set()
-        for i in range(len(mejor_ruta) - 1):
-            origen = mejor_ruta[i]
-            destino = mejor_ruta[i + 1]
-            if self.grafica.has_edge(origen, destino):
-                subruta = [origen, destino]
-            else:
-                try:
-                    subruta = nx.shortest_path(self.grafica, origen, destino, weight='length')
-                except nx.NetworkXNoPath:
-                    raise ErrorRedVial(f"No existe ruta entre {origen} y {destino}")
-            nueva_subruta = []
-            for idx, nodo in enumerate(subruta):
-                if idx == 0 or idx == len(subruta) - 1:
-                    nueva_subruta.append(nodo)
-                else:
-                    if nodo not in visitados:
-                        nueva_subruta.append(nodo)
-            if not ruta_completa:
-                ruta_completa.extend(nueva_subruta)
-            else:
-                if ruta_completa[-1] == nueva_subruta[0]:
-                    ruta_completa.extend(nueva_subruta[1:])
-                else:
-                    ruta_completa.extend(nueva_subruta)
-            for nodo in nueva_subruta:
-                visitados.add(nodo)
-        return ruta_completa
-
-    def _calcular_distancia_total(self, ruta_completa: List[int]) -> float:
-        """
-        Calcula la distancia total de la ruta, sumando la longitud de cada arista utilizada.
-        
-        Se recorre la secuencia de nodos y, para cada par consecutivo, se obtiene el valor
-        de la columna 'length' de la arista.
-        
-        :param ruta_completa: Lista de nodos que conforman la ruta completa.
+        :param ruta: Camino (lista de nodos) del ciclo.
         :devuelve: Distancia total en metros.
         """
-        distancia_total = 0.0
-        for i in range(len(ruta_completa) - 1):
-            nodo_inicio = ruta_completa[i]
-            nodo_destino = ruta_completa[i + 1]
-            if self.grafica.has_edge(nodo_inicio, nodo_destino):
-                datos_arista = self.grafica.get_edge_data(nodo_inicio, nodo_destino)
-                llave = list(datos_arista.keys())[0]
-                distancia_total += datos_arista[llave].get('length', 1.0)
-        return distancia_total
+        dist = 0.0
+        for i in range(len(ruta) - 1):
+            u, v = ruta[i], ruta[i+1]
+            if self.grafica.has_edge(u, v):
+                datos = self.grafica.get_edge_data(u, v)
+                key = list(datos.keys())[0]
+                dist += datos[key].get('length', 1.0)
+        return dist
 
-    def _graficar_ruta(self, ruta_completa: List[int]) -> None:
+    def _graficar_ruta(self, ruta: List[int]) -> None:
         """
-        Genera la gráfica de la ruta y la guarda en un archivo en vez de mostrarla.
+        Visualiza un ciclo sobre la red vial utilizando OSMNX y Matplotlib.
+        
+        :param ruta: Camino (lista de nodos) del ciclo.
+        :raises ErrorRedVial: Si ocurre algún error durante la visualización.
         """
         from matplotlib import pyplot as plt
-        from collections import Counter
-
+        conteo = Counter(ruta)
+        tam = [10 * conteo.get(n, 0) for n in self.grafica.nodes()]
         try:
-            # Se calcula el tamaño de los nodos (esto es solo un ejemplo)
-            conteo = Counter(ruta_completa)
-            tamanio_nodos = [10 * conteo.get(nodo, 0) for nodo in self.grafica.nodes()]
-
-            # Usamos osmnx.plot_graph_route, indicando show=False para evitar la visualización
             fig, ax = ox.plot_graph_route(
                 self.grafica,
-                ruta_completa,
+                ruta,
                 route_linewidth=6,
-                node_size=tamanio_nodos,
+                node_size=tam,
                 node_color='blue',
                 bgcolor='white',
                 edge_color='gray',
-                edge_linewidth=0.5,
-                show=False  # No se muestra en pantalla
+                edge_linewidth=0.5
             )
-            # Se guarda la figura en un archivo (opcional)
-            output_path = os.path.join("temp", "imagenes", "ruta_mtsp.png")
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            fig.savefig(output_path, dpi=150)
-            plt.close(fig)  # Cerramos la figura para liberar recursos
+            plt.show()
         except Exception as e:
-            # En caso de error, simplemente se omite la generación de la gráfica
-            print(f"Omitiendo graficación: {e}")
+            raise ErrorRedVial(f"Error al graficar la ruta: {e}")
 
     def _resolver_MTSP_fuertemente_conexa(self) -> None:
         """
-        Soluciona el TSP para redes fuertemente conexas por medio de un algoritmo genético,
-        buscando ciclos hamiltonianos (o aproximaciones) que visiten cada nodo una sola vez.
-        
-        Asigna los pesos a las aristas, calcula la matriz de distancias, genera la población inicial
-        y la evoluciona durante un número determinado de generaciones. Finalmente, selecciona el mejor
-        individuo, construye la ruta completa y presenta la distancia total.
+        Resuelve el TSP para una red fuertemente conexa aplicando el procedimiento completo
+        y obteniendo un ciclo hamiltoniano que visite todos los nodos sin repeticiones.
         """
         try:
             self._asignar_pesos_aristas()
         except ErrorRedVial as e:
-            raise ErrorRedVial(f"Error durante la asignación de pesos: {e}")
-
+            raise ErrorRedVial(f"Error durante asignación de pesos: {e}")
         nodos = list(self.grafica.nodes)
         try:
             matriz = self._calcular_matriz_distancias(nodos)
         except ErrorRedVial as e:
-            raise ErrorRedVial(f"Error al calcular la matriz de distancias: {e}")
-
+            raise ErrorRedVial(f"Error en la matriz de distancias: {e}")
         try:
-            poblacion = self._crear_poblacion(nodos)
+            ruta = self._resolver_MTSP_subgraph(nodos, matriz)
         except Exception as e:
-            raise ErrorRedVial(f"Error al crear la población inicial: {e}")
-
+            raise ErrorRedVial(f"Error al construir la ruta: {e}")
+        dist = self._calcular_distancia_total(ruta)
+        self.ruta_completa = ruta
+        print(f"\nMejor ciclo obtenido (orden de nodos):\n{ruta}")
+        print(f"Distancia total: {dist/1000.0:,.2f} km")
         try:
-            for _ in tqdm(range(self.generaciones), desc="Generaciones", ncols=80):
-                poblacion = self._evolucionar_poblacion(poblacion, matriz)
-        except Exception as e:
-            raise ErrorRedVial(f"Error durante la evolución de la población: {e}")
-
-        try:
-            mejor_individuo = min(poblacion, key=lambda ind: self._calcular_fitness(ind, matriz))
-            ruta_completa = self._calcular_ruta_completa_fuertemente_conexa(mejor_individuo)
-            dist_total = self._calcular_distancia_total(ruta_completa)
-            dist_total_km = dist_total / 1000.0
-            self.ruta_completa = ruta_completa
-        except ErrorRedVial as e:
-            raise ErrorRedVial(f"Error al construir la ruta completa: {e}")
-        except Exception as e:
-            raise ErrorRedVial(f"Error al calcular la distancia total: {e}")
-
-        print(f"\nMejor ciclo encontrado (orden de nodos):\n{mejor_individuo}")
-        print(f"Distancia total: {dist_total_km:,.2f} km")
-
-        try:
-            self._graficar_ruta(ruta_completa)
+            self._graficar_ruta(ruta)
         except ErrorRedVial as e:
             print(f"[Error] {e}")
 
     def _resolver_MTSP_SCC(self) -> None:
         """
-        Soluciona el TSP para redes compuestas por múltiples componentes fuertemente conexas (SCC).
-        
-        Asigna los pesos a las aristas y calcula la matriz de distancias global. Para cada SCC,
-        halla un ciclo interno (o aproximación) mediante el algoritmo genético. Luego, ensambla
-        dichas soluciones en una o varias rutas finales, mostrando su distancia total.
+        Resuelve el TSP para redes compuestas por múltiples SCC.
+        Para cada SCC se aplica el mismo procedimiento que para una red fuertemente conexa,
+        garantizando que se obtenga un único ciclo hamiltoniano que recorra todos sus nodos sin repeticiones.
         """
         try:
             self._asignar_pesos_aristas()
         except ErrorRedVial as e:
             raise ErrorRedVial(f"Error al asignar pesos: {e}")
-
-        nodos_totales = list(self.grafica.nodes())
+        nodos_totales = list(self.grafica.nodes)
         matriz_global = self._calcular_matriz_distancias(nodos_totales)
-        scc_lista = list(nx.strongly_connected_components(self.grafica))
-        print(f"La red contiene {len(scc_lista)} componentes fuertemente conexas.")
-
-        soluciones_scc = []
-        for idx, scc in enumerate(scc_lista, start=1):
+        scc_list = list(nx.strongly_connected_components(self.grafica))
+        print(f"La red contiene {len(scc_list)} SCC.")
+        rutas_scc = []
+        for idx, scc in enumerate(scc_list, start=1):
             nodos_scc = list(scc)
-            if len(nodos_scc) == 1:
-                soluciones_scc.append({'ruta': nodos_scc + nodos_scc, 'nodos': nodos_scc})
-                continue
-
             print(f"Procesando SCC {idx} con {len(nodos_scc)} nodos...")
-            submatriz = {ni: {nj: matriz_global[ni][nj] for nj in nodos_scc} for ni in nodos_scc}
-            poblacion_scc = self._crear_poblacion(nodos_scc)
-
-            for _ in tqdm(range(self.generaciones), desc=f"Generaciones en SCC {idx}", ncols=80):
-                poblacion_scc = self._evolucionar_poblacion(poblacion_scc, submatriz)
-
-            mejor_scc = min(poblacion_scc, key=lambda ind: self._calcular_fitness(ind, submatriz))
-            soluciones_scc.append({'ruta': mejor_scc, 'nodos': nodos_scc})
-
-        # Se concatenan los ciclos de cada SCC
-        indices_restantes = set(range(len(soluciones_scc)))
-        rutas_finales = []
-        while indices_restantes:
-            actual_idx = indices_restantes.pop()
-            ruta_actual = list(soluciones_scc[actual_idx]['ruta'])
-            extendido = True
-            while extendido and indices_restantes:
-                extendido = False
-                mejor_candidato = None
-                mejor_conexion = None
-                menor_longitud = float('inf')
-                nodo_final = ruta_actual[-1]
-                for cand in list(indices_restantes):
-                    nodo_inicio_cand = soluciones_scc[cand]['ruta'][0]
-                    conexion = []
-                    if nx.has_path(self.grafica, nodo_final, nodo_inicio_cand):
-                        try:
-                            conexion = nx.shortest_path(self.grafica, nodo_final, nodo_inicio_cand, weight='length')
-                        except nx.NetworkXNoPath:
-                            conexion = []
-                    if conexion:
-                        if any(n in ruta_actual for n in conexion[1:-1]):
-                            continue
-                        dist_conexion = self._calcular_distancia_total(conexion)
-                        if dist_conexion < menor_longitud:
-                            menor_longitud = dist_conexion
-                            mejor_candidato = cand
-                            mejor_conexion = conexion
-                if mejor_candidato is not None:
-                    if ruta_actual[-1] == mejor_conexion[0]:
-                        ruta_actual.extend(mejor_conexion[1:])
-                    else:
-                        ruta_actual.extend(mejor_conexion)
-                    ruta_cand = soluciones_scc[mejor_candidato]['ruta']
-                    if ruta_actual[-1] == ruta_cand[0]:
-                        ruta_actual.extend(ruta_cand[1:])
-                    else:
-                        ruta_actual.extend(ruta_cand)
-                    indices_restantes.remove(mejor_candidato)
-                    extendido = True
-            rutas_finales.append(ruta_actual)
-        
-        # Se grafican y presentan los resultados de cada ruta generada
-        for idx, ruta in enumerate(rutas_finales, start=1):
-            distancia = self._calcular_distancia_total(ruta) / 1000.0
-            print(f"\n[Resultados - Ruta {idx} en SCC]:")
-            print(f"Número de nodos en la ruta: {len(ruta)}")
-            print(f"Distancia: {distancia:,.2f} km")
+            if len(nodos_scc) == 1:
+                rutas_scc.append(nodos_scc + nodos_scc)
+            else:
+                submatriz = {ni: {nj: matriz_global[ni][nj] for nj in nodos_scc} for ni in nodos_scc}
+                ciclo = self._resolver_MTSP_subgraph(nodos_scc, submatriz)
+                rutas_scc.append(ciclo)
+                print(f"SCC {idx} procesada. Nodos en la ruta: {len(ciclo)-1}")
+        self.ruta_completa = rutas_scc
+        for idx, ruta in enumerate(rutas_scc, start=1):
+            dist = self._calcular_distancia_total(ruta)
+            print(f"\n[Resultados - SCC {idx}]:")
+            print(f"Número de nodos en la ruta: {len(ruta)-1}")
+            print(f"Distancia: {dist/1000.0:,.2f} km")
             try:
                 self._graficar_ruta(ruta)
             except ErrorRedVial as e:
-                print(f"[Error al graficar SCC {idx}] {e}")
+                print(f"[Error al graficar SCC {idx}]: {e}")
 
-        self.ruta_completa = rutas_finales
-
-    # -------------------------------------------------------------------------
-    # Métodos públicos
-    # -------------------------------------------------------------------------
     def resolver_MTSP(self) -> None:
         """
-        Determina de manera automática si la red vial es fuertemente conexa o no, y
-        aplica la estrategia apropiada para resolver el problema TSP.
-        
-        Si la red es fuertemente conexa, aplica la estrategia de búsqueda de un ciclo
-        hamiltoniano que visite todos los nodos; de lo contrario, aplica el método
-        para redes con múltiples SCC.
+        Determina si la red vial es fuertemente conexa o está compuesta por múltiples SCC.
+        Si fuertemente conexa, se obtiene un único ciclo hamiltoniano; 
+        en caso contrario se resuelve de forma independiente para cada SCC.
         """
         if nx.is_strongly_connected(self.grafica):
             print("La red es fuertemente conexa.")
@@ -2154,133 +2045,70 @@ class ResolverMTSP:
 
     def exportar_ruta_shapefiles(self, salida_nodos: str, salida_aristas: str) -> None:
         """
-        Exporta la(s) ruta(s) generada(s) a dos shapefiles (nodos y aristas), renumerando de forma secuencial los nodos.
+        Exporta la(s) ruta(s) a shapefiles (nodos y aristas) renumerando los nodos de forma secuencial.
+        En redes fuertemente conexas se exporta un ciclo; en múltiples SCC se exporta un ciclo por componente.
         
-        Para redes fuertemente conexas, reconstruye la secuencia de aristas usando las subrutas reales,
-        evitando la duplicación de nodos intermedios. Para varias SCC, emplea la ruta tal cual fue calculada,
-        de modo que la suma de las longitudes en la tabla de atributos coincida con la distancia total calculada.
-        
-        :param salida_nodos: Ruta de salida para el shapefile de nodos.
-        :param salida_aristas: Ruta de salida para el shapefile de aristas.
-        :raises Exception: Si la ruta no ha sido calculada o si ocurre algún error al procesar la geometría.
+        :param salida_nodos: Ruta del shapefile de nodos.
+        :param salida_aristas: Ruta del shapefile de aristas.
+        :raises Exception: Si la ruta no ha sido calculada o ocurre un error en la exportación.
         """
         import pandas as pd
         if not hasattr(self, 'ruta_completa'):
             raise Exception("No se ha calculado la ruta. Ejecute resolver_MTSP() primero.")
-
         nodos_gdf, _ = ox.graph_to_gdfs(self.grafica)
-        
-        # Verifica si se trata de múltiples SCC (lista de rutas) o de una sola secuencia
-        if (
-            isinstance(self.ruta_completa, list)
-            and len(self.ruta_completa) > 0
-            and isinstance(self.ruta_completa[0], list)
-        ):
+        if isinstance(self.ruta_completa, list) and self.ruta_completa and isinstance(self.ruta_completa[0], list):
             rutas = self.ruta_completa
-            multiple_scc = True
+            multiple = True
         else:
             rutas = [self.ruta_completa]
-            multiple_scc = False
+            multiple = False
         
-        todos_nodos_ruta = set()
-        aristas_ruta = []
-
-        # Recorre cada ruta para reconstruir las aristas
+        todos_nodos = set()
+        aristas = []
         for ruta in rutas:
-            if len(ruta) < 2:
-                continue
-            for i in range(len(ruta) - 1):
-                u = ruta[i]
-                v = ruta[i+1]
-                if u not in self.grafica.nodes or v not in self.grafica.nodes:
-                    print(f"[Advertencia] Uno de los nodos ({u}, {v}) no se encuentra en la gráfica, se omite.")
-                    continue
-
-                if multiple_scc:
-                    subruta = [u, v]
-                else:
-                    if self.grafica.has_edge(u, v):
-                        subruta = [u, v]
-                    else:
-                        try:
-                            subruta = list(nx.shortest_path(self.grafica, u, v, weight='length'))
-                        except nx.NetworkXNoPath:
-                            print(f"No se encontró camino entre {u} y {v} en la gráfica.")
-                            continue
-                        if any(n in todos_nodos_ruta for n in subruta[1:-1]):
-                            subruta = [u, v]
-
-                todos_nodos_ruta.update(subruta)
-                for j in range(len(subruta) - 1):
-                    aristas_ruta.append((subruta[j], subruta[j+1]))
-        
-        # Ordena los nodos para renumerarlos
-        nodos_ruta = sorted(list(todos_nodos_ruta))
-        mapeo_nodos = {nodo: nuevo_id for nuevo_id, nodo in enumerate(nodos_ruta, start=1)}
-
+            for i in range(len(ruta)-1):
+                u, v = ruta[i], ruta[i+1]
+                todos_nodos.update([u, v])
+                aristas.append((u, v))
+        nodos_lista = sorted(list(todos_nodos))
+        mapeo = {nodo: idx+1 for idx, nodo in enumerate(nodos_lista)}
         geom_col = 'geometry'
         if geom_col not in nodos_gdf.columns:
             if hasattr(nodos_gdf, '_geometry_column_name'):
                 geom_col = nodos_gdf._geometry_column_name
             else:
                 raise ValueError("No se encontró la columna 'geometry' en el GeoDataFrame de nodos.")
-        
         nodos_exportar = []
-        for nodo in nodos_ruta:
+        for nodo in nodos_lista:
             if nodo in nodos_gdf.index:
-                datos = {
-                    'node_id': mapeo_nodos[nodo],
+                nodos_exportar.append({
+                    'node_id': mapeo[nodo],
                     'osmid': nodo,
                     'geometry': nodos_gdf.loc[nodo, geom_col]
-                }
-                nodos_exportar.append(datos)
-            else:
-                print(f"[Advertencia] El nodo {nodo} no se encontró en el GeoDataFrame de nodos.")
-        
+                })
         if not nodos_exportar:
-            raise ValueError("No se recolectaron nodos para exportación. Verifique la ruta calculada.")
-        
+            raise ValueError("No se recolectaron nodos para exportar.")
         df_nodos = pd.DataFrame(nodos_exportar)
-        if 'geometry' not in df_nodos.columns:
-            raise ValueError("La lista de nodos no contiene la clave 'geometry'.")
-        
         nodos_gdf_exportar = gpd.GeoDataFrame(df_nodos, geometry='geometry', crs=nodos_gdf.crs)
         nodos_gdf_exportar.to_file(salida_nodos)
         
         aristas_exportar = []
-        for (u, v) in aristas_ruta:
-            if u in mapeo_nodos and v in mapeo_nodos:
+        for u, v in aristas:
+            if u in mapeo and v in mapeo:
                 if self.grafica.has_edge(u, v):
-                    datos_arista = self.grafica.get_edge_data(u, v)
-                    llave = list(datos_arista.keys())[0]
-                    datos = datos_arista[llave]
-                    if 'geometry' in datos and datos['geometry'] is not None:
-                        geom = datos['geometry']
+                    datos = self.grafica.get_edge_data(u, v)
+                    llave = list(datos.keys())[0]
+                    info = datos[llave]
+                    if 'geometry' in info and info['geometry'] is not None:
+                        geom = info['geometry']
                     else:
                         try:
-                            origen_geom = nodos_gdf.loc[u, geom_col]
-                            destino_geom = nodos_gdf.loc[v, geom_col]
-                            geom = LineString([origen_geom, destino_geom])
+                            geom = LineString([nodos_gdf.loc[u, geom_col], nodos_gdf.loc[v, geom_col]])
                         except KeyError:
-                            print(f"No se encontró geometría para los nodos {u} o {v}, se omite la arista.")
                             continue
-                    info_arista = {
-                        'u': mapeo_nodos[u],
-                        'v': mapeo_nodos[v],
-                        'length': datos.get('length', None),
-                        'geometry': geom
-                    }
-                    aristas_exportar.append(info_arista)
-                else:
-                    print(f"No se encontró arista directa entre {u} y {v}, se usa 'arista directa'.")
-            else:
-                print(f"Uno de los nodos ({u}, {v}) no está en el mapeo, se omite la arista.")
-        
+                    aristas_exportar.append({'u': mapeo[u], 'v': mapeo[v], 'length': info.get('length', None), 'geometry': geom})
         df_aristas = pd.DataFrame(aristas_exportar)
-        if 'geometry' not in df_aristas.columns:
-            raise ValueError("La lista de aristas no contiene la clave 'geometry'.")
-        
         aristas_gdf_exportar = gpd.GeoDataFrame(df_aristas, geometry='geometry', crs=nodos_gdf.crs)
         aristas_gdf_exportar.to_file(salida_aristas)
-        
-        print(f"Shapefiles exportados exitosamente: {len(nodos_exportar)} nodos y {len(aristas_exportar)} aristas.")
+        print(f"Shapefiles exportados: {len(nodos_exportar)} nodos y {len(aristas_exportar)} aristas.")
+

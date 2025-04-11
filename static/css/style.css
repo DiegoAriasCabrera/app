@@ -57,52 +57,12 @@ input[type=number] {
   line-height: 20px;
 }
 
-/* Reseteo básico y configuración global */
-html, body {
-    margin: 0;
-    padding: 0;
-    block-size: 100%;
-    font-family: Arial, sans-serif;
-    box-sizing: border-box;
-}
-/* Encabezado fijo en la parte superior */
-header {
-    inline-size: 100%;
-    background-color: #f0f0f0;
-    padding: 10px 20px;
-    text-align: center;
-    z-index: 1000;
-}
-header h1 {
-    margin: 0;
-    font-size: 1.2rem;
-}
-/* Contenedor del mapa: ocupará el espacio restante de la ventana */
-#map {
-    inline-size: 100%;
-    block-size: calc(100vh - 60px); /* Se descuenta la altura del header */
-}
-/* Estilo para la etiqueta del sector, más pequeña y legible */
-.sector-label div {
-    font-size: 10px;
-    font-weight: bold;
-    color: #333;
-    background-color: rgba(255, 255, 255, 0.9);
-    padding: 2px 4px;
-    border-radius: 3px;
-    border: 1px solid #ccc;
-    text-align: center;
-    white-space: nowrap;
-}
-
-/* Contenedor central para alinear y delimitar el contenido */
 .container {
     max-inline-size: 1200px;
     margin: 0 auto;
     padding: 20px;
 }
 
-/* Estilo para cajas de mensajes o secciones importantes */
 .message-container {
     background: #f9f9f9;
     border: 1px solid #ddd;
@@ -112,7 +72,6 @@ header h1 {
     margin-block-end: 20px;
 }
 
-/* Botones unificados */
 .btn {
     background: #007BFF;
     color: #fff;
@@ -128,7 +87,6 @@ header h1 {
     background: #0056b3;
 }
 
-/* Opcional: mejora en estilos de encabezado y pie */
 header, footer {
     background: #f0f0f0;
     padding: 10px 20px;
@@ -138,3 +96,97 @@ footer p {
     margin: 0;
     font-size: 0.9rem;
 }
+
+#addCamionBtn,
+#removeCamionBtn {
+    inline-size: 30px;
+    block-size: 30px;
+    text-align: center;
+    line-height: 0px;
+    padding: 0;
+    margin: 0;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.help-button {
+    background-color: #ccc; /* Ajusta el color de fondo si lo deseas */
+    border: none;
+    border-radius: 50%;
+    inline-size: 30px;
+    block-size: 30px;
+    text-align: center;
+    line-height: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-inline-start: 10px;
+}
+
+.help-popup {
+    display: none; /* Se oculta por defecto */
+    position: fixed;
+    z-index: 999; /* Asegúrate de que quede al frente de otros elementos */
+    inset-inline-start: 0;
+    inset-block-start: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: auto; /* Habilita scroll si el contenido es muy grande */
+    background-color: rgba(0,0,0,0.5); /* Fondo semi-transparente */
+}
+
+.help-popup-content {
+    background-color: #fff;
+    margin: 10% auto; /* Centrado vertical y horizontal */
+    padding: 20px;
+    border: 1px solid #888;
+    inline-size: 80%; /* Ajusta el ancho */
+    max-inline-size: 600px; /* Máximo ancho, si quieres */
+    position: relative; /* Para posicionar el botón de cierre */
+    border-radius: 5px;
+}
+
+.close-button {
+    color: #aaa;
+    float: inline-end;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: #000;
+}
+
+.parametros-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-block-start: 20px;
+    margin-block-end: 10px;
+}
+
+.camiones-header {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Espacio entre el texto y el botón */
+    margin-block-start: 20px;
+    margin-block-end: 10px;
+}
+
+.tsp-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-block-end: 10px;
+}
+
+.botones-accion {
+    display: flex;
+    flex-direction: row; /* Coloca los elementos en columna */
+    gap: 10px;
+  }
+
+  .help-popup-content {
+    text-align: justify;
+  }
