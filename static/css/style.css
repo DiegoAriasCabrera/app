@@ -56,3 +56,85 @@ input[type=number] {
   font-size: 12px;
   line-height: 20px;
 }
+
+/* Reseteo básico y configuración global */
+html, body {
+    margin: 0;
+    padding: 0;
+    block-size: 100%;
+    font-family: Arial, sans-serif;
+    box-sizing: border-box;
+}
+/* Encabezado fijo en la parte superior */
+header {
+    inline-size: 100%;
+    background-color: #f0f0f0;
+    padding: 10px 20px;
+    text-align: center;
+    z-index: 1000;
+}
+header h1 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+/* Contenedor del mapa: ocupará el espacio restante de la ventana */
+#map {
+    inline-size: 100%;
+    block-size: calc(100vh - 60px); /* Se descuenta la altura del header */
+}
+/* Estilo para la etiqueta del sector, más pequeña y legible */
+.sector-label div {
+    font-size: 10px;
+    font-weight: bold;
+    color: #333;
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 2px 4px;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Contenedor central para alinear y delimitar el contenido */
+.container {
+    max-inline-size: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Estilo para cajas de mensajes o secciones importantes */
+.message-container {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 5px;
+    text-align: center;
+    margin-block-end: 20px;
+}
+
+/* Botones unificados */
+.btn {
+    background: #007BFF;
+    color: #fff;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 3px;
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.btn:hover {
+    background: #0056b3;
+}
+
+/* Opcional: mejora en estilos de encabezado y pie */
+header, footer {
+    background: #f0f0f0;
+    padding: 10px 20px;
+    text-align: center;
+}
+footer p {
+    margin: 0;
+    font-size: 0.9rem;
+}

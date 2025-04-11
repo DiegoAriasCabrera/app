@@ -5,11 +5,11 @@
 {% endblock title %}
 
 {% block content %}
-<h1>Exportación de Sectores para {{ alcaldia }}</h1>
-<p>Los sectores han sido exportados correctamente a la carpeta designada.</p>
-
-<!-- Botón para procesar la red vial (calles y nodos) -->
-<form action="{{ url_for('procesar_calles', alcaldia=alcaldia) }}" method="post" style="margin-block-start:20px;">
-  <button type="submit">Procesar Calles</button>
-</form>
+<div class="message-container">
+  <h2>Exportación de Sectores Exitosa para {{ alcaldia }}</h2>
+  <p>Los sectores han sido exportados correctamente.</p>
+  <form action="{{ url_for('seleccionar_sector', alcaldia=alcaldia) }}" method="get">
+    <button type="submit" class="btn">Seleccionar Sector para Procesar</button>
+  </form>
+</div>
 {% endblock content %}

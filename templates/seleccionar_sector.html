@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Seleccionar Sector para {{ alcaldia }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Hoja de estilos de Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon/favicon.png') }}">
+  <!-- Estilos propios -->
+  <style>
+    /* Reset básico y configuración global */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      inline-size: 100%;
+      block-size: 100%;
+      font-family: Arial, sans-serif;
+    }
+    /* Encabezado y pie de página fijos */
+    header {
+      background: #f0f0f0;
+      padding: 10px 20px;
+      text-align: center;
+      block-size: 60px; /* Altura estimada del header */
+      line-height: 40px;
+    }
+    footer {
+      background: #f0f0f0;
+      padding: 10px 20px;
+      text-align: center;
+      block-size: 40px; /* Altura estimada del footer */
+      line-height: 20px;
+    }
+    /* El contenedor del mapa ocupa el resto del viewport */
+    #map {
+      inline-size: 100%;
+      block-size: calc(100vh - 100px); /* 100vh menos 60px (header) + 40px (footer) */
+    }
+    /* Estilo para la etiqueta de cada sector */
+    .sector-label div {
+      font-size: 10px;
+      font-weight: bold;
+      color: #333;
+      background-color: rgba(255, 255, 255, 0.9);
+      padding: 2px 4px;
+      border-radius: 3px;
+      border: 1px solid #ccc;
+      text-align: center;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Seleccione el sector a procesar</h1>
+  </header>
+  
+  <div id="map"></div>
+  
+  <!-- Formulario oculto para enviar el sector seleccionado -->
+  <form id="sectorForm" method="POST" action="{{ url_for('procesar_sector', alcaldia=alcaldia) }}">
+    <input type="hidden" name="sector_id" id="sector_id" value="">
+  </form>
+  
+  <footer>
+    <p>&copy; 2025 Laboratorio Optiserv</p>
+  </footer>
+  
+  <!-- Cargar librerías externas -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  
+  <!-- Inyectar la variable procesada por Flask -->
+  <script>
+    var rawSectores = {{ sectores | tojson }};
+  </script>
+  
+  <!-- Incluir el archivo de JavaScript externo -->
+  <script src="{{ url_for('static', filename='js/sector.js') }}"></script>
+</body>
+</html>

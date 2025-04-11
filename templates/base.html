@@ -2,11 +2,22 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Sistema de recolección de basura{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon/favicon.png') }}">
 </head>
 <body>
-  {% block content %}{% endblock content %}
+  <header>
+    <h1>Sistema de Recolección de Basura</h1>
+  </header>
+
+  <div class="container">
+    {% block content %}{% endblock content %}
+  </div>
+
+  <footer>
+    <p>&copy; {{ current_year if current_year else "2025" }} Laboratorio Optiserv</p>
+  </footer>
 </body>
 </html>
